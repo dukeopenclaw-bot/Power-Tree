@@ -15,16 +15,16 @@
     body { margin: 0; font-family: 'Segoe UI', sans-serif; overflow: hidden; background: #1a1a2e; }
     #cy { width: 100vw; height: 100vh; }
 
-    /* ── 레인 배경 ── */
+    /* ── 레인 배경 (수직 컬럼) ── */
     #lanes {
       position: absolute; inset: 0; z-index: 0; pointer-events: none; overflow: hidden;
     }
     .lane {
-      position: absolute; left: 0; right: 0;
-      border-top: 1px dashed rgba(255,255,255,0.1);
-      display: flex; align-items: center;
-      padding-left: 10px; font-size: 10px; font-weight: bold;
-      letter-spacing: 1px; opacity: 0.5;
+      position: absolute; top: 0; bottom: 0;
+      border-left: 1px dashed rgba(255,255,255,0.1);
+      display: flex; align-items: flex-start; justify-content: center;
+      padding-top: 10px; font-size: 10px; font-weight: bold;
+      letter-spacing: 1px; opacity: 0.5; writing-mode: horizontal-tb;
     }
 
     #panel {
@@ -94,17 +94,18 @@ const GAS_URL = "https://script.google.com/macros/s/AKfycbzHbyYrYIfs5TdBV25xSbwQ
 
 // ── 레인 정의 (tier → 표시 정보) ──────────────────────
 const TIER_INFO = [
-  { label: 'EDB',          color: '#3498db', bg: 'rgba(52,152,219,0.06)'  },
+  { label: 'EDB',               color: '#3498db', bg: 'rgba(52,152,219,0.06)'  },
   { label: 'ESB / EXFMR (상위)', color: '#9b59b6', bg: 'rgba(155,89,182,0.05)' },
-  { label: 'ESB / EXFMR / JB',   color: '#2ecc40', bg: 'rgba(46,204,113,0.05)' },
+  { label: 'ESB / EXFMR / JB',  color: '#2ecc40', bg: 'rgba(46,204,113,0.05)' },
   { label: 'ESB / EXFMR (하위)', color: '#1abc9c', bg: 'rgba(26,188,156,0.05)' },
-  { label: 'LOAD',         color: '#f39c12', bg: 'rgba(243,156,18,0.04)'  },
-  { label: 'RME / 단독',   color: '#e74c3c', bg: 'rgba(231,76,60,0.04)'   },
+  { label: 'LOAD',              color: '#f39c12', bg: 'rgba(243,156,18,0.04)'  },
+  { label: 'RME / 단독',        color: '#e74c3c', bg: 'rgba(231,76,60,0.04)'   },
 ];
 
-const NODE_GAP_X = 140;  // 노드 간 수평 간격
-const TIER_GAP_Y = 180;  // tier 간 수직 간격
-const TOP_OFFSET = 80;   // 최상단 여백
+// ▼▼▼ 핵심 변경: X↔Y 역할 교환 ▼▼▼
+const NODE_GAP_Y  = 140;  // 같은 tier 내 노드 간 수평(X) 간격
+const TIER_GAP_X  = 200;  // tier 간 수직(Y) 간격 → 이제 X(좌우)로 사용
+const LEFT_OFFSET = 80;   // 좌측 여백 (구 TOP_OFFSET)
 
 let cy;
 const tooltip   = document.getElementById('tooltip');
@@ -146,34 +147,25 @@ function initGraph(elements) {
     tierGroups[t].push(n.data.id);
   });
 
-  // ── Preset 좌표 계산 ────────────────────────────────
+  // ── Preset 좌표 계산 (위→아래 방향) ────────────────
+  // tier가 증가할수록 아래(Y값 증가)로 배치
+  // 같은 tier 내 노드는 좌우(X)로 분산
   const posMap = {};
   const tierList = Object.keys(tierGroups).map(Number).sort((a,b)=>a-b);
 
   tierList.forEach(tier => {
-    const ids = tierGroups[tier];
-    const y   = TOP_OFFSET + tier * TIER_GAP_Y;
+    const ids  = tierGroups[tier];
+    // ▼ tier → Y축 (위에서 아래로)
+    const y    = LEFT_OFFSET + tier * TIER_GAP_X;
+    // ▼ 같은 tier 내 노드 → X축 (가운데 정렬)
+    const totalW = (ids.length - 1) * NODE_GAP_Y;
 
-    if (tier === 0) {
-      // EDB: 전체 좌우에 분산 배치
-      const half  = Math.ceil(ids.length / 2);
-      const leftG  = ids.slice(0, half);
-      const rightG = ids.slice(half);
-      const totalW = Math.max(ids.length, 8) * NODE_GAP_X;
-
-      leftG.forEach((id, i) => {
-        posMap[id] = { x: i * NODE_GAP_X, y };
-      });
-      rightG.forEach((id, i) => {
-        posMap[id] = { x: totalW - (rightG.length - 1 - i) * NODE_GAP_X, y };
-      });
-    } else {
-      // 나머지 tier: 중앙 정렬
-      const totalW = (ids.length - 1) * NODE_GAP_X;
-      ids.forEach((id, i) => {
-        posMap[id] = { x: i * NODE_GAP_X - totalW / 2, y };
-      });
-    }
+    ids.forEach((id, i) => {
+      posMap[id] = {
+        x: i * NODE_GAP_Y - totalW / 2,  // 좌우 중앙 정렬
+        y: y                               // tier 깊이 = Y
+      };
+    });
   });
 
   // ── Cytoscape 초기화 ────────────────────────────────
@@ -303,23 +295,40 @@ function updateStatusBar() {
   statusbar.textContent = `전체 ${total}개 | 🟢 전원 ${powered}개 | 🔴 개방 ${open}개`;
 }
 
-// ── 레인 배경 그리기 ────────────────────────────────
+// ── 레인 배경 그리기 (수평 줄 → 위에서 아래 방향) ───
 function drawLanes() {
   if (!cy) return;
   const container = document.getElementById('lanes');
   container.innerHTML = '';
 
   TIER_INFO.forEach((info, tier) => {
-    const cyY = TOP_OFFSET + tier * TIER_GAP_Y;
-    // cy 내부 좌표 → 화면 좌표 변환
-    const screenY = cy.zoom() * (cyY - TIER_GAP_Y / 2) + cy.pan().y;
-    const screenH = cy.zoom() * TIER_GAP_Y;
+    // tier Y좌표 (cy 내부)
+    const cyY = LEFT_OFFSET + tier * TIER_GAP_X;
+
+    // 레인 경계: 이전 tier와 현재 tier 사이 중간 ~ 현재 tier와 다음 tier 사이 중간
+    const cyTop    = cyY - TIER_GAP_X / 2;
+    const cyBottom = cyY + TIER_GAP_X / 2;
+
+    // cy 내부 Y → 화면 Y 변환
+    const screenTop    = cy.zoom() * cyTop    + cy.pan().y;
+    const screenBottom = cy.zoom() * cyBottom + cy.pan().y;
+    const screenH      = screenBottom - screenTop;
 
     const div = document.createElement('div');
     div.className = 'lane';
     div.style.cssText = `
-      top:${screenY}px; height:${screenH}px;
-      background:${info.bg}; color:${info.color};
+      position: absolute;
+      left: 0; right: 0;
+      top: ${screenTop}px;
+      height: ${Math.max(screenH, 0)}px;
+      background: ${info.bg};
+      border-top: 1px dashed rgba(255,255,255,0.1);
+      display: flex; align-items: center;
+      padding-left: 10px;
+      font-size: 10px; font-weight: bold;
+      letter-spacing: 1px; opacity: 0.5;
+      color: ${info.color};
+      pointer-events: none;
     `;
     div.textContent = info.label;
     container.appendChild(div);
