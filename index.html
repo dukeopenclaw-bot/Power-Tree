@@ -693,20 +693,21 @@ function applyRadialLayout(centerId, neighborIds) {
   const count = neighborIds.length;
   if (count === 0) return;
 
-  neighborIds.forEach((nid, i) => {
+    neighborIds.forEach((nid, i) => {
     const n = cy.getElementById(nid);
-    if (!n.length) return;
-    // 이미 화면에 있으면 위치 유지 (자연스러운 확장)
-    if (!n.data('is_hidden')) return;
+    if (!n.length || !n.data('is_hidden')) return;
 
-    const angle  = (2 * Math.PI * i) / count - Math.PI / 2;
+    // ⬇⬇⬇ 핵심 변경 부분 ⬇⬇⬇
+    const angle  = Math.PI * (i / Math.max(count - 1, 1)); // 0 ~ π
     const radius = RADIAL_BASE + Math.floor(i / 12) * RADIAL_EXTRA;
+
     n.position({
-      x: cx + radius * Math.cos(angle),
-      y: cy_ + radius * Math.sin(angle),
+      x: cx + radius * Math.cos(angle - Math.PI / 2),
+      y: cy_ + radius * Math.sin(angle - Math.PI / 2),
     });
   });
 }
+
 
 /* ── 현재 보이는 노드 위치 스냅샷 ── */
 function capturePositions() {
