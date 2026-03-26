@@ -672,10 +672,12 @@ function expandFromNode(id, resetHistory) {
 }
 
 
- /* ══════════════════════════════════════
+
      
  
 /* ── 방사형 배치 ── */
+ /* ══════════════════════════════════════
+  
 function applyRadialLayout(centerId, neighborIds) {
   if (!cy) return;
   const cn = cy.getElementById(centerId);
@@ -692,11 +694,6 @@ function applyRadialLayout(centerId, neighborIds) {
     cy_ = (ext.y1 + ext.y2) / 2;
   }
   cn.position({ x: cx, y: cy_ });
-
-
-
-
-
 
 
   
@@ -723,39 +720,43 @@ function applyRadialLayout(centerId, neighborIds) {
 
 //아래로 배열
 
-function applyTreeLayoutMultiRow(centerId, neighborIds) {
+/* ── 아래 방향 / 행 기준(Grid) 배치 ── */
+function applyVerticalRowLayout(centerId, neighborIds) {
   if (!cy) return;
-  const cn = cy.getElementById(centerId);
 
+  const center = cy.getElementById(centerId);
+
+  // 중심 노드 위치 유지 또는 화면 중앙
   let cx, cy_;
-  if (!cn.data('is_hidden')) {
-    cx  = cn.position('x');
-    cy_ = cn.position('y');
+  if (!center.data('is_hidden')) {
+    cx  = center.position('x');
+    cy_ = center.position('y');
   } else {
     const ext = cy.extent();
     cx  = (ext.x1 + ext.x2) / 2;
     cy_ = (ext.y1 + ext.y2) / 2;
   }
 
-  cn.position({ x: cx, y: cy_ });
+  center.position({ x: cx, y: cy_ });
 
-  const gapX = 120;
-  const gapY = 140;
-  const perRow = 6; // 한 줄 최대 개수
+  if (!neighborIds.length) return;
+
+  /* 레이아웃 파라미터 */
+  const MAX_PER_ROW   = 10;   // 한 행에 10개
+  const COL_GAP       = 150;  // 가로 간격
+  const ROW_GAP       = 100;  // 세로 간격
+  const START_Y_GAP   = 120;  // 중심 노드 아래 여백
 
   neighborIds.forEach((nid, i) => {
     const n = cy.getElementById(nid);
     if (!n.length || !n.data('is_hidden')) return;
 
-    const row = Math.floor(i / perRow);
-    const col = i % perRow;
-
-    const rowCount = Math.min(perRow, neighborIds.length - row * perRow);
-    const startX = cx - ((rowCount - 1) * gapX) / 2;
+    const row = Math.floor(i / MAX_PER_ROW);
+    const col = i % MAX_PER_ROW;
 
     n.position({
-      x: startX + col * gapX,
-      y: cy_ + gapY * (row + 1)
+      x: cx + (col - (MAX_PER_ROW - 1) / 2) * COL_GAP,
+      y: cy_ + START_Y_GAP + row * ROW_GAP,
     });
   });
 }
