@@ -106,5 +106,21 @@
       }
     }
   </script>
+
+  <script>
+  // 페이지가 로드되면 실행
+  window.onload = function() {
+    // 주소 대신 이 명령어를 쓰면 자동으로 Code.gs의 getTreeData 함수를 찾아갑니다.
+    google.script.run
+      .withSuccessHandler(initGraph) // 성공하면 initGraph 함수 실행
+      .withFailureHandler(function(err) { console.error(err); }) // 실패 시 에러 출력
+      .getTreeData(); // Code.gs에 있는 함수 이름
+  };
+
+  function initGraph(data) {
+    // 시트에서 가져온 데이터로 그래프 그리는 로직...
+    console.log("데이터 로드 완료:", data);
+  }
+</script>
 </body>
 </html>
