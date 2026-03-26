@@ -720,13 +720,14 @@ function applyRadialLayout(centerId, neighborIds) {
 
 //아래로 배열
 
-/* ── 아래 방향 / 행 기준(Grid) 배치 ── */
+
+/* ── 아래 방향 / 행 기준 Grid 배치 (안정판) ── */
 function applyVerticalRowLayout(centerId, neighborIds) {
   if (!cy) return;
 
   const center = cy.getElementById(centerId);
 
-  // 중심 노드 위치 유지 또는 화면 중앙
+  // 중심 좌표
   let cx, cy_;
   if (!center.data('is_hidden')) {
     cx  = center.position('x');
@@ -741,26 +742,31 @@ function applyVerticalRowLayout(centerId, neighborIds) {
 
   if (!neighborIds.length) return;
 
-  /* 레이아웃 파라미터 */
-  const MAX_PER_ROW   = 10;   // 한 행에 10개
-  const COL_GAP       = 150;  // 가로 간격
-  const ROW_GAP       = 100;  // 세로 간격
-  const START_Y_GAP   = 120;  // 중심 노드 아래 여백
+  const MAX_PER_ROW = 10;
+  const COL_GAP     = 140;
+  const ROW_GAP     = 100;
+  const START_Y     = 120;
 
   neighborIds.forEach((nid, i) => {
     const n = cy.getElementById(nid);
-    if (!n.length || !n.data('is_hidden')) return;
+    if (!n.length) return;
 
     const row = Math.floor(i / MAX_PER_ROW);
     const col = i % MAX_PER_ROW;
 
+    const rowCount = Math.min(
+      MAX_PER_ROW,
+      neighborIds.length - row * MAX_PER_ROW
+    );
+
+    const startX = cx - ((rowCount - 1) * COL_GAP) / 2;
+
     n.position({
-      x: cx + (col - (MAX_PER_ROW - 1) / 2) * COL_GAP,
-      y: cy_ + START_Y_GAP + row * ROW_GAP,
+      x: startX + col * COL_GAP,
+      y: cy_ + START_Y + row * ROW_GAP,
     });
   });
 }
-
   
 
 /* ── 현재 보이는 노드 위치 스냅샷 ── */
