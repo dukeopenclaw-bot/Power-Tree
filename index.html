@@ -1,68 +1,162 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html lang="ko" data-theme="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <title>Power Tree Simulator</title>
-  <link rel="manifest" href="manifest.json">
-
   <script src="https://unpkg.com/cytoscape@3.23.0/dist/cytoscape.min.js"></script>
-
   <style>
+    /* ════════════════════════════════════════
+       테마 변수
+    ════════════════════════════════════════ */
+    :root {
+      --bg:           #1a1a2e;
+      --panel-bg:     rgba(20,20,40,0.95);
+      --panel-border: rgba(255,255,255,0.12);
+      --text:         #eee;
+      --text-sub:     #999;
+      --hint:         #666;
+      --status-bg:    rgba(20,20,40,0.92);
+      --tip-bg:       rgba(10,10,20,0.96);
+      --input-bg:     rgba(255,255,255,0.08);
+      --input-border: rgba(255,255,255,0.22);
+      --btn-bg:       rgba(255,255,255,0.10);
+      --btn-hover:    rgba(255,255,255,0.18);
+    }
+    [data-theme="light"] {
+      --bg:           #f0f2f8;
+      --panel-bg:     rgba(255,255,255,0.97);
+      --panel-border: rgba(0,0,0,0.12);
+      --text:         #222;
+      --text-sub:     #555;
+      --hint:         #999;
+      --status-bg:    rgba(255,255,255,0.95);
+      --tip-bg:       rgba(15,15,30,0.94);
+      --input-bg:     rgba(0,0,0,0.06);
+      --input-border: rgba(0,0,0,0.20);
+      --btn-bg:       rgba(0,0,0,0.07);
+      --btn-hover:    rgba(0,0,0,0.13);
+    }
+
     * { box-sizing: border-box; }
-    body { margin: 0; font-family: 'Segoe UI', sans-serif; overflow: hidden; background: #1a1a2e; }
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', sans-serif;
+      overflow: hidden;
+      background: var(--bg);
+      transition: background 0.25s;
+    }
     #cy { width: 100vw; height: 100vh; }
 
-    /* ── 레인 배경 (수직 컬럼) ── */
     #lanes {
-      position: absolute; inset: 0; z-index: 0; pointer-events: none; overflow: hidden;
-    }
-    .lane {
-      position: absolute; top: 0; bottom: 0;
-      border-left: 1px dashed rgba(255,255,255,0.1);
-      display: flex; align-items: flex-start; justify-content: center;
-      padding-top: 10px; font-size: 10px; font-weight: bold;
-      letter-spacing: 1px; opacity: 0.5; writing-mode: horizontal-tb;
+      position: absolute; inset: 0; z-index: 0;
+      pointer-events: none; overflow: hidden;
     }
 
+    /* ── 패널 ── */
     #panel {
       position: absolute; top: 12px; left: 12px; z-index: 10;
-      background: rgba(20,20,40,0.92); padding: 14px 16px;
-      border-radius: 10px; box-shadow: 0 4px 20px rgba(0,0,0,0.4);
-      border: 1px solid rgba(255,255,255,0.1); min-width: 180px; color: #eee;
+      background: var(--panel-bg);
+      padding: 12px 14px;
+      border-radius: 12px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.3);
+      border: 1px solid var(--panel-border);
+      min-width: 200px;
+      color: var(--text);
     }
-    #panel h3 { margin: 0 0 10px; font-size: 14px; color: #fff; }
-    .legend { font-size: 11px; line-height: 2; }
-    .dot { display:inline-block; width:11px; height:11px; border-radius:50%; margin-right:6px; vertical-align:middle; }
-    .hint { font-size: 10px; color: #888; margin-top: 8px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 6px; }
+    #panel-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 10px; gap: 8px;
+    }
+    #panel-header h3 { margin: 0; font-size: 14px; color: var(--text); }
 
+    #theme-toggle {
+      cursor: pointer;
+      background: var(--btn-bg);
+      border: 1px solid var(--panel-border);
+      border-radius: 20px;
+      padding: 3px 10px;
+      font-size: 11px;
+      color: var(--text);
+      transition: background 0.15s;
+      white-space: nowrap;
+    }
+    #theme-toggle:hover { background: var(--btn-hover); }
+
+    .legend { font-size: 11px; line-height: 2.1; color: var(--text); }
+    .dot {
+      display: inline-block; width: 11px; height: 11px;
+      border-radius: 50%; margin-right: 6px; vertical-align: middle;
+    }
+
+    .divider { border: none; border-top: 1px solid var(--panel-border); margin: 8px 0; }
+
+    /* 설정 행 */
+    .setting-row {
+      display: flex; align-items: center; gap: 6px; margin-top: 5px;
+    }
+    .setting-label { font-size: 11px; color: var(--text-sub); white-space: nowrap; flex: 1; }
+    .setting-input {
+      width: 48px; padding: 3px 6px;
+      background: var(--input-bg);
+      border: 1px solid var(--input-border);
+      border-radius: 6px;
+      color: var(--text);
+      font-size: 12px; text-align: center;
+    }
+    .setting-btn {
+      cursor: pointer;
+      background: var(--btn-bg);
+      border: 1px solid var(--panel-border);
+      border-radius: 6px;
+      padding: 3px 8px;
+      font-size: 11px;
+      color: var(--text);
+      transition: background 0.15s;
+    }
+    .setting-btn:hover { background: var(--btn-hover); }
+
+    .hint { font-size: 10px; color: var(--hint); margin-top: 8px; }
+
+    /* ── 툴팁 ── */
     #tooltip {
       position: absolute; z-index: 20; display: none;
-      background: rgba(10,10,20,0.95); color: #eee;
+      background: var(--tip-bg); color: #eee;
       font-size: 12px; padding: 9px 13px; border-radius: 8px;
-      pointer-events: none; max-width: 250px; line-height: 1.7;
+      pointer-events: none; max-width: 260px; line-height: 1.7;
       box-shadow: 0 4px 14px rgba(0,0,0,0.5);
-      border: 1px solid rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.12);
     }
+
+    /* ── 상태바 ── */
     #statusbar {
-      position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%);
-      z-index: 10; background: rgba(20,20,40,0.92);
-      padding: 6px 20px; border-radius: 20px; font-size: 12px; color: #ccc;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.4); white-space: nowrap;
-      border: 1px solid rgba(255,255,255,0.08);
+      position: absolute; bottom: 12px; left: 50%;
+      transform: translateX(-50%);
+      z-index: 10;
+      background: var(--status-bg);
+      padding: 6px 20px; border-radius: 20px;
+      font-size: 12px; color: var(--text-sub);
+      box-shadow: 0 2px 10px rgba(0,0,0,0.25);
+      white-space: nowrap;
+      border: 1px solid var(--panel-border);
     }
+
+    /* ── 로딩 ── */
     #loading {
       position: absolute; inset: 0; z-index: 100;
-      background: #1a1a2e; display: flex;
-      flex-direction: column; align-items: center; justify-content: center;
-      font-size: 15px; color: #aaa; gap: 14px;
+      background: var(--bg);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      font-size: 15px; color: var(--text-sub); gap: 14px;
     }
     #loading.hidden { display: none; }
-    .spinner { width: 40px; height: 40px; border: 4px solid #333;
-               border-top-color: #2ecc40; border-radius: 50%;
-               animation: spin 0.8s linear infinite; }
+    .spinner {
+      width: 40px; height: 40px;
+      border: 4px solid #333; border-top-color: #2ecc40;
+      border-radius: 50%; animation: spin 0.8s linear infinite;
+    }
     @keyframes spin { to { transform: rotate(360deg); } }
   </style>
 </head>
@@ -71,15 +165,33 @@
 <div id="lanes"></div>
 
 <div id="panel">
-  <h3>⚡ Power Tree</h3>
+  <div id="panel-header">
+    <h3>⚡ Power Tree</h3>
+    <button id="theme-toggle">🌙 다크</button>
+  </div>
+
   <div class="legend">
     <div><span class="dot" style="background:#3498db"></span>EDB</div>
-    <div><span class="dot" style="background:#9b59b6"></span>EXFMR</div>
+    <div><span class="dot" style="background:#9b59b6"></span>EXFMR (상위)</div>
     <div><span class="dot" style="background:#2ecc40"></span>전원 공급 중</div>
     <div><span class="dot" style="background:#ff4136;border:2px solid #888"></span>차단기 개방</div>
     <div><span class="dot" style="background:#445"></span>전원 없음</div>
   </div>
-  <div class="hint">클릭 → 차단기 토글<br>스크롤 → 줌 / 드래그 → 이동</div>
+
+  <hr class="divider">
+
+  <div class="setting-row">
+    <span class="setting-label">가로열 수</span>
+    <input id="cols-input" class="setting-input" type="number" min="1" max="60" value="12">
+    <button class="setting-btn" id="cols-apply">적용</button>
+  </div>
+  <div class="setting-row">
+    <span class="setting-label">단독노드 행</span>
+    <input id="solo-rows-input" class="setting-input" type="number" min="1" max="20" value="3">
+    <button class="setting-btn" id="solo-apply">적용</button>
+  </div>
+
+  <div class="hint">클릭 → 차단기 토글<br>스크롤 → 줌 · 드래그 → 이동</div>
 </div>
 
 <div id="tooltip"></div>
@@ -87,43 +199,74 @@
 <div id="cy"></div>
 
 <script>
-// ╔══════════════════════════════════════════════════════╗
-// ║  ★ GAS 배포 URL을 여기에 붙여넣으세요 ★             ║
-// ╚══════════════════════════════════════════════════════╝
+/* ═══════════════════════════════════════════════════════
+   ★ GAS 배포 URL
+═══════════════════════════════════════════════════════ */
 const GAS_URL = "https://script.google.com/macros/s/AKfycbzHbyYrYIfs5TdBV25xSbwQ9t_INk-OWHs0OzczLyM-PJOv3ZovOix7hGnfhD8NWvZ-/exec";
 
-// ── 레인 정의 (tier → 표시 정보) ──────────────────────
+/* ── 레인 정의 ── */
 const TIER_INFO = [
-  { label: 'EDB',               color: '#3498db', bg: 'rgba(52,152,219,0.06)'  },
-  { label: 'ESB / EXFMR (상위)', color: '#9b59b6', bg: 'rgba(155,89,182,0.05)' },
-  { label: 'ESB / EXFMR / JB',  color: '#2ecc40', bg: 'rgba(46,204,113,0.05)' },
-  { label: 'ESB / EXFMR (하위)', color: '#1abc9c', bg: 'rgba(26,188,156,0.05)' },
-  { label: 'LOAD',              color: '#f39c12', bg: 'rgba(243,156,18,0.04)'  },
-  { label: 'RME / 단독',        color: '#e74c3c', bg: 'rgba(231,76,60,0.04)'   },
+  { label:'EDB',                color:'#3498db', bgD:'rgba(52,152,219,0.07)',  bgL:'rgba(52,152,219,0.11)'  },
+  { label:'ESB / EXFMR (상위)', color:'#9b59b6', bgD:'rgba(155,89,182,0.06)', bgL:'rgba(155,89,182,0.10)' },
+  { label:'ESB / EXFMR / JB',  color:'#27ae60', bgD:'rgba(46,204,113,0.06)', bgL:'rgba(46,204,113,0.10)' },
+  { label:'ESB / EXFMR (하위)', color:'#1abc9c', bgD:'rgba(26,188,156,0.06)', bgL:'rgba(26,188,156,0.10)' },
+  { label:'LOAD',               color:'#e67e22', bgD:'rgba(243,156,18,0.05)', bgL:'rgba(243,156,18,0.09)'  },
+  { label:'RME / 단독',         color:'#e74c3c', bgD:'rgba(231,76,60,0.05)', bgL:'rgba(231,76,60,0.09)'   },
 ];
 
-// ▼▼▼ 핵심 변경: X↔Y 역할 교환 ▼▼▼
-const NODE_GAP_Y  = 140;  // 같은 tier 내 노드 간 수평(X) 간격
-const TIER_GAP_X  = 200;  // tier 간 수직(Y) 간격 → 이제 X(좌우)로 사용
-const LEFT_OFFSET = 80;   // 좌측 여백 (구 TOP_OFFSET)
+/* ── 레이아웃 상수 ── */
+const NODE_GAP_X  = 130;   // 수평 노드 간격
+const TIER_GAP_Y  = 185;   // tier 간 수직 간격
+const TOP_OFFSET  = 80;    // 최상단 여백
+const SOLO_ROW_GAP = 120;  // 단독노드 행 간격
 
+/* ── 전역 상태 ── */
 let cy;
+let rawElements = null;
+let colCount    = 12;
+let soloRows    = 3;
+let isDark      = true;
+
 const tooltip   = document.getElementById('tooltip');
 const statusbar = document.getElementById('statusbar');
 const loading   = document.getElementById('loading');
 
-// ── 진입점 ────────────────────────────────────────────
+/* ═══════════════════════════════════════════════════════
+   테마 토글
+═══════════════════════════════════════════════════════ */
+document.getElementById('theme-toggle').addEventListener('click', () => {
+  isDark = !isDark;
+  document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+  document.getElementById('theme-toggle').textContent = isDark ? '🌙 다크' : '☀️ 라이트';
+  if (cy) { applyCyTheme(); drawLanes(); }
+});
+
+/* ═══════════════════════════════════════════════════════
+   설정 버튼
+═══════════════════════════════════════════════════════ */
+document.getElementById('cols-apply').addEventListener('click', () => {
+  const v = parseInt(document.getElementById('cols-input').value, 10);
+  if (v >= 1 && v <= 60) { colCount = v; if (rawElements) reLayout(); }
+});
+document.getElementById('solo-apply').addEventListener('click', () => {
+  const v = parseInt(document.getElementById('solo-rows-input').value, 10);
+  if (v >= 1 && v <= 20) { soloRows = v; if (rawElements) reLayout(); }
+});
+
+/* ═══════════════════════════════════════════════════════
+   진입점
+═══════════════════════════════════════════════════════ */
 document.addEventListener('DOMContentLoaded', async () => {
   try {
-    const res = await fetch(GAS_URL, { redirect: 'follow' });
+    const res  = await fetch(GAS_URL, { redirect: 'follow' });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const text = await res.text();
     if (text.trim().startsWith('<')) throw new Error(
       'GAS HTML 반환 → 배포 설정에서\n"액세스: 모든 사용자(익명 포함)"으로 재배포 필요'
     );
-    const data = JSON.parse(text);
+    rawElements = JSON.parse(text);
     loading.classList.add('hidden');
-    initGraph(data);
+    initGraph(rawElements);
   } catch (err) {
     loading.innerHTML = `<div style="color:#e74c3c;text-align:center;max-width:320px;line-height:1.7">
       ❌ 데이터 로드 실패<br><br><b>${err.message.replace(/\n/g,'<br>')}</b></div>`;
@@ -131,7 +274,151 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 });
 
-// ── 그래프 초기화 ─────────────────────────────────────
+/* ═══════════════════════════════════════════════════════
+   좌표 계산
+═══════════════════════════════════════════════════════ */
+function buildPosMap(elements) {
+  const posMap = {};
+
+  /* 연결수 집계 */
+  const deg = {};
+  elements.nodes.forEach(n => { deg[n.data.id] = 0; });
+  elements.edges.forEach(e => {
+    deg[e.data.source] = (deg[e.data.source] || 0) + 1;
+    deg[e.data.target] = (deg[e.data.target] || 0) + 1;
+  });
+
+  /* 분류 */
+  const edbNodes    = [];   // tier 0 → 맨 위 좌우
+  const soloNodes   = [];   // tier 5 & degree ≤ 1 → 맨 아래 다단
+  const normalNodes = {};   // 나머지 tier → 위→아래
+
+  elements.nodes.forEach(n => {
+    const d = n.data;
+    if (d.tier === 0) {
+      edbNodes.push(d.id);
+    } else if (d.tier === 5 && (deg[d.id] || 0) <= 1) {
+      soloNodes.push(d.id);
+    } else {
+      (normalNodes[d.tier] = normalNodes[d.tier] || []).push(d.id);
+    }
+  });
+
+  const tierList      = Object.keys(normalNodes).map(Number).sort((a,b)=>a-b);
+  const maxNormalTier = tierList.length ? Math.max(...tierList) : 4;
+
+  /* ── EDB: 좌우 분리 배치 ── */
+  {
+    const y      = TOP_OFFSET;
+    const half   = Math.ceil(edbNodes.length / 2);
+    const leftG  = edbNodes.slice(0, half);
+    const rightG = edbNodes.slice(half);
+    const span   = (colCount - 1) * NODE_GAP_X;   // 전체 가로폭 기준
+
+    leftG.forEach((id, i) => {
+      posMap[id] = { x: -span / 2 + i * NODE_GAP_X, y };
+    });
+    rightG.forEach((id, i) => {
+      posMap[id] = { x: span / 2 - (rightG.length - 1 - i) * NODE_GAP_X, y };
+    });
+  }
+
+  /* ── 일반 tier 노드: colCount 기준 다단, 가운데 정렬 ── */
+  tierList.forEach(tier => {
+    const ids   = normalNodes[tier];
+    const baseY = TOP_OFFSET + tier * TIER_GAP_Y;
+    const subGap = TIER_GAP_Y * 0.55;   // 같은 tier 내 추가 행 간격
+
+    ids.forEach((id, i) => {
+      const row    = Math.floor(i / colCount);
+      const col    = i % colCount;
+      const rowLen = Math.min(colCount, ids.length - row * colCount);
+      const startX = -(rowLen - 1) * NODE_GAP_X / 2;
+      posMap[id] = {
+        x: startX + col * NODE_GAP_X,
+        y: baseY + row * subGap,
+      };
+    });
+  });
+
+  /* ── 단독노드: 맨 아래 soloRows 행으로 세로 우선 배치 ── */
+  {
+    const baseY    = TOP_OFFSET + (maxNormalTier + 1) * TIER_GAP_Y + 20;
+    const totalCols = Math.ceil(soloNodes.length / soloRows);
+
+    soloNodes.forEach((id, i) => {
+      const col    = Math.floor(i / soloRows);
+      const row    = i % soloRows;
+      const startX = -(totalCols - 1) * NODE_GAP_X / 2;
+      posMap[id] = {
+        x: startX + col * NODE_GAP_X,
+        y: baseY + row * SOLO_ROW_GAP,
+      };
+    });
+  }
+
+  return posMap;
+}
+
+/* ═══════════════════════════════════════════════════════
+   Cytoscape 스타일 생성
+═══════════════════════════════════════════════════════ */
+function getCyStyle() {
+  const D = isDark;
+  return [
+    {
+      selector: 'node',
+      style: {
+        label: 'data(label)',
+        'font-size': '9px', 'font-weight': 'bold',
+        width: '44px', height: '44px',
+        'background-color': D ? '#2a2a3a' : '#c8cad8',
+        color: D ? '#aab' : '#334',
+        'text-valign': 'bottom', 'text-halign': 'center',
+        'text-margin-y': '6px',
+        'text-wrap': 'wrap', 'text-max-width': '70px',
+        'border-width': 2, 'border-color': D ? '#556' : '#9aa'
+      }
+    },
+    { selector:'node[tier = 0]', style:{ 'background-color': D?'#1a4a7a':'#b8d4f0', 'border-color':'#3498db' } },
+    { selector:'node[tier = 1]', style:{ 'background-color': D?'#3d1a5e':'#d8bef0', 'border-color':'#9b59b6' } },
+    { selector:'node[tier = 2]', style:{ 'background-color': D?'#1a3a3a':'#b0e8de', 'border-color':'#1abc9c' } },
+    { selector:'node[tier = 3]', style:{ 'background-color': D?'#1a3a2a':'#b0e0c0', 'border-color':'#27ae60' } },
+    { selector:'node[tier = 5]', style:{ 'background-color': D?'#3a1a1a':'#f0c0c0', 'border-color':'#e74c3c' } },
+    // 전원 공급 중
+    { selector:'node[?is_powered]',
+      style:{ 'background-color': D?'#145a20':'#c8f0cc', 'border-color':'#2ecc40', color: D?'#7dff8a':'#1a6e22' } },
+    { selector:'node[?is_powered][tier = 0]',
+      style:{ 'background-color': D?'#0e3460':'#a8c8f0', 'border-color':'#3498db', color: D?'#7bc8ff':'#0a4080' } },
+    { selector:'node[?is_powered][tier = 1]',
+      style:{ 'background-color': D?'#2d0e50':'#d0a8f0', 'border-color':'#9b59b6', color: D?'#cc88ff':'#4a1a7a' } },
+    { selector:'node[?is_powered][tier = 2]',
+      style:{ 'background-color': D?'#0e3030':'#90e0d4', 'border-color':'#1abc9c', color: D?'#7fffee':'#0a4040' } },
+    // 차단기 개방
+    { selector:'node[is_breaker_closed = 0]',
+      style:{ 'background-color': D?'#5a0000':'#ffd0d0', 'border-color':'#ff4136', 'border-width':3, color: D?'#ff8888':'#aa0000' } },
+    // 간선
+    { selector:'edge', style:{
+      width:1.5, 'line-color': D?'#445':'#bbb',
+      'target-arrow-shape':'triangle', 'target-arrow-color': D?'#445':'#bbb',
+      'curve-style':'bezier', opacity:0.6
+    }},
+    { selector:'edge[?is_live]', style:{
+      width:3, 'line-color':'#2ecc40', 'target-arrow-color':'#2ecc40', opacity:1
+    }},
+    { selector:'node:active', style:{ 'overlay-opacity':0.1 } }
+  ];
+}
+
+function applyCyTheme() {
+  if (!cy) return;
+  cy.style(getCyStyle());
+  cy.container().style.background = isDark ? '#1a1a2e' : '#f0f2f8';
+}
+
+/* ═══════════════════════════════════════════════════════
+   그래프 초기화
+═══════════════════════════════════════════════════════ */
 function initGraph(elements) {
   if (!elements?.nodes?.length) {
     loading.innerHTML = '<div style="color:#e67e22">⚠️ 데이터 없음</div>';
@@ -139,90 +426,20 @@ function initGraph(elements) {
     return;
   }
 
-  // ── Tier별로 노드 묶기 ──────────────────────────────
-  const tierGroups = {};
-  elements.nodes.forEach(n => {
-    const t = n.data.tier ?? 4;
-    if (!tierGroups[t]) tierGroups[t] = [];
-    tierGroups[t].push(n.data.id);
-  });
+  const posMap = buildPosMap(elements);
 
-  // ── Preset 좌표 계산 (위→아래 방향) ────────────────
-  // tier가 증가할수록 아래(Y값 증가)로 배치
-  // 같은 tier 내 노드는 좌우(X)로 분산
-  const posMap = {};
-  const tierList = Object.keys(tierGroups).map(Number).sort((a,b)=>a-b);
-
-  tierList.forEach(tier => {
-    const ids  = tierGroups[tier];
-    // ▼ tier → Y축 (위에서 아래로)
-    const y    = LEFT_OFFSET + tier * TIER_GAP_X;
-    // ▼ 같은 tier 내 노드 → X축 (가운데 정렬)
-    const totalW = (ids.length - 1) * NODE_GAP_Y;
-
-    ids.forEach((id, i) => {
-      posMap[id] = {
-        x: i * NODE_GAP_Y - totalW / 2,  // 좌우 중앙 정렬
-        y: y                               // tier 깊이 = Y
-      };
-    });
-  });
-
-  // ── Cytoscape 초기화 ────────────────────────────────
   cy = cytoscape({
     container: document.getElementById('cy'),
     elements,
-    style: [
-      {
-        selector: 'node',
-        style: {
-          label: 'data(label)',
-          'font-size': '9px', 'font-weight': 'bold',
-          width: '44px', height: '44px',
-          'background-color': '#334',
-          color: '#aab',
-          'text-valign': 'bottom', 'text-halign': 'center',
-          'text-margin-y': '6px',
-          'text-wrap': 'wrap', 'text-max-width': '70px',
-          'border-width': 2, 'border-color': '#556'
-        }
-      },
-      // ── 타입별 기본색 ──
-      { selector: 'node[tier = 0]', style: { 'background-color': '#1a4a7a', 'border-color': '#3498db' } },
-      { selector: 'node[tier = 1]', style: { 'background-color': '#3d1a5e', 'border-color': '#9b59b6' } },
-      { selector: 'node[tier = 2]', style: { 'background-color': '#1a3a3a', 'border-color': '#1abc9c' } },
-      { selector: 'node[tier = 3]', style: { 'background-color': '#1a3a2a', 'border-color': '#27ae60' } },
-      { selector: 'node[tier = 5]', style: { 'background-color': '#3a1a1a', 'border-color': '#e74c3c' } },
-      // ── 전원 공급 중 ──
-      { selector: 'node[?is_powered]',
-        style: { 'background-color': '#145a20', 'border-color': '#2ecc40', color: '#7dff8a' } },
-      { selector: 'node[?is_powered][tier = 0]',
-        style: { 'background-color': '#0e3460', 'border-color': '#3498db', color: '#7bc8ff' } },
-      { selector: 'node[?is_powered][tier = 1]',
-        style: { 'background-color': '#2d0e50', 'border-color': '#9b59b6', color: '#cc88ff' } },
-      { selector: 'node[?is_powered][tier = 2]',
-        style: { 'background-color': '#0e3030', 'border-color': '#1abc9c', color: '#7fffee' } },
-      // ── 차단기 개방 (최우선) ──
-      { selector: 'node[is_breaker_closed = 0]',
-        style: { 'background-color': '#5a0000', 'border-color': '#ff4136', 'border-width': 3, color: '#ff8888' } },
-      // ── 간선 ──
-      { selector: 'edge', style: {
-        width: 1.5, 'line-color': '#334',
-        'target-arrow-shape': 'triangle', 'target-arrow-color': '#334',
-        'curve-style': 'bezier', opacity: 0.6
-      }},
-      { selector: 'edge[?is_live]', style: {
-        width: 3, 'line-color': '#2ecc40', 'target-arrow-color': '#2ecc40', opacity: 1
-      }},
-      { selector: 'node:active', style: { 'overlay-opacity': 0.1 } }
-    ],
+    style: getCyStyle(),
     layout: {
       name: 'preset',
-      positions: node => posMap[node.id()] || { x: 0, y: 400 }
+      positions: node => posMap[node.id()] || { x: 0, y: 600 }
     }
   });
 
-  // ── 초기 상태 ────────────────────────────────────────
+  cy.container().style.background = isDark ? '#1a1a2e' : '#f0f2f8';
+
   cy.nodes().forEach(n => {
     n.data('is_breaker_closed', 1);
     if (n.indegree() === 0) n.data('is_root', true);
@@ -232,7 +449,6 @@ function initGraph(elements) {
   updateStatusBar();
   drawLanes();
 
-  // ── 이벤트 ───────────────────────────────────────────
   cy.on('tap', 'node', evt => {
     const n = evt.target;
     n.data('is_breaker_closed', n.data('is_breaker_closed') ? 0 : 1);
@@ -246,7 +462,8 @@ function initGraph(elements) {
     const n = evt.target, pos = evt.renderedPosition, d = n.data();
     const tierLabel = TIER_INFO[d.tier]?.label || '';
     const st = d.is_breaker_closed
-      ? (d.is_powered ? '🟢 전원 공급 중' : '⚪ 전원 없음') : '🔴 차단기 개방';
+      ? (d.is_powered ? '🟢 전원 공급 중' : '⚪ 전원 없음')
+      : '🔴 차단기 개방';
     tooltip.innerHTML =
       `<b>${d.id}</b> <span style="font-size:10px;opacity:0.6">[${tierLabel}]</span><br>` +
       (d.loc  ? `📍 ${d.loc}<br>`  : '') +
@@ -255,22 +472,36 @@ function initGraph(elements) {
       `상태: ${st}`;
     Object.assign(tooltip.style, { display:'block', left:(pos.x+16)+'px', top:(pos.y-10)+'px' });
   });
-  cy.on('mouseout',  'node', () => tooltip.style.display = 'none');
+  cy.on('mouseout',  'node', () => { tooltip.style.display = 'none'; });
   cy.on('mousemove', 'node', evt => {
     const p = evt.renderedPosition;
     Object.assign(tooltip.style, { left:(p.x+16)+'px', top:(p.y-10)+'px' });
   });
 }
 
-// ── BFS 전력 흐름 ────────────────────────────────────
+/* ═══════════════════════════════════════════════════════
+   재레이아웃
+═══════════════════════════════════════════════════════ */
+function reLayout() {
+  if (!cy || !rawElements) return;
+  const posMap = buildPosMap(rawElements);
+  cy.nodes().forEach(n => {
+    const p = posMap[n.id()];
+    if (p) n.position(p);
+  });
+  cy.fit(cy.nodes(), 60);
+  drawLanes();
+}
+
+/* ═══════════════════════════════════════════════════════
+   BFS 전력 흐름
+═══════════════════════════════════════════════════════ */
 function updatePowerFlow() {
   cy.nodes().data('is_powered', false);
   cy.edges().data('is_live', false);
-
   const roots = cy.nodes('[is_root]').filter(n => n.data('is_breaker_closed') === 1);
   roots.data('is_powered', true);
   const queue = roots.toArray();
-
   while (queue.length) {
     const curr = queue.shift();
     if (curr.data('is_breaker_closed') !== 1) continue;
@@ -278,15 +509,14 @@ function updatePowerFlow() {
       const tgt = edge.target();
       if (tgt.data('is_breaker_closed') !== 1) return;
       edge.data('is_live', true);
-      if (!tgt.data('is_powered')) {
-        tgt.data('is_powered', true);
-        queue.push(tgt);
-      }
+      if (!tgt.data('is_powered')) { tgt.data('is_powered', true); queue.push(tgt); }
     });
   }
 }
 
-// ── 상태바 ──────────────────────────────────────────
+/* ═══════════════════════════════════════════════════════
+   상태바
+═══════════════════════════════════════════════════════ */
 function updateStatusBar() {
   if (!cy) return;
   const total   = cy.nodes().length;
@@ -295,41 +525,36 @@ function updateStatusBar() {
   statusbar.textContent = `전체 ${total}개 | 🟢 전원 ${powered}개 | 🔴 개방 ${open}개`;
 }
 
-// ── 레인 배경 그리기 (수평 줄 → 위에서 아래 방향) ───
+/* ═══════════════════════════════════════════════════════
+   레인 배경 (수평 행)
+═══════════════════════════════════════════════════════ */
 function drawLanes() {
   if (!cy) return;
   const container = document.getElementById('lanes');
   container.innerHTML = '';
+  const borderColor = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)';
 
   TIER_INFO.forEach((info, tier) => {
-    // tier Y좌표 (cy 내부)
-    const cyY = LEFT_OFFSET + tier * TIER_GAP_X;
-
-    // 레인 경계: 이전 tier와 현재 tier 사이 중간 ~ 현재 tier와 다음 tier 사이 중간
-    const cyTop    = cyY - TIER_GAP_X / 2;
-    const cyBottom = cyY + TIER_GAP_X / 2;
-
-    // cy 내부 Y → 화면 Y 변환
-    const screenTop    = cy.zoom() * cyTop    + cy.pan().y;
-    const screenBottom = cy.zoom() * cyBottom + cy.pan().y;
-    const screenH      = screenBottom - screenTop;
+    const cyY    = TOP_OFFSET + tier * TIER_GAP_Y;
+    const cyTop  = cyY - TIER_GAP_Y / 2;
+    const cyBot  = cyY + TIER_GAP_Y / 2;
+    const sTop   = cy.zoom() * cyTop + cy.pan().y;
+    const sH     = cy.zoom() * (cyBot - cyTop);
 
     const div = document.createElement('div');
-    div.className = 'lane';
-    div.style.cssText = `
-      position: absolute;
-      left: 0; right: 0;
-      top: ${screenTop}px;
-      height: ${Math.max(screenH, 0)}px;
-      background: ${info.bg};
-      border-top: 1px dashed rgba(255,255,255,0.1);
-      display: flex; align-items: center;
-      padding-left: 10px;
-      font-size: 10px; font-weight: bold;
-      letter-spacing: 1px; opacity: 0.5;
-      color: ${info.color};
-      pointer-events: none;
-    `;
+    Object.assign(div.style, {
+      position:'absolute', left:'0', right:'0',
+      top: sTop + 'px',
+      height: Math.max(sH, 0) + 'px',
+      background: isDark ? info.bgD : info.bgL,
+      borderTop: `1px dashed ${borderColor}`,
+      display:'flex', alignItems:'center',
+      paddingLeft:'10px',
+      fontSize:'10px', fontWeight:'bold',
+      letterSpacing:'1px', opacity:'0.55',
+      color: info.color,
+      pointerEvents:'none',
+    });
     div.textContent = info.label;
     container.appendChild(div);
   });
