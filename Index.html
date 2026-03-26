@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.23.0/cytoscape.min.js"></script>
+  <script src="https://unpkg.com/dagre@0.8.5/dist/dagre.min.js"></script>
+  <script src="https://cytoscape.org/cytoscape.js-dagre/cytoscape-dagre.js"></script>
+  <style>
+    body { margin: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; overflow: hidden; }
+    #cy { width: 100vw; height: 100vh; background: #f8f9fa; }
+    .ui-panel { position: absolute; top: 10px; left: 10px; z-index: 10; background: rgba(255,255,255,0.9); padding: 15px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); border: 1px solid #ddd; }
+    .legend { font-size: 12px; margin-top: 10px; }
+    .status-active { color: #2ecc40; font-weight: bold; }
+    .status-off { color: #ff4136; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <div class="ui-panel">
+    <h3>⚡ Power Tree Simulator</h3>
+    <div class="legend">
+      <div>🟢 초록: 전원 공급 중 (Active)</div>
+      <div>🔴 빨강: 차단기 개방 (User Off)</div>
+      <div>⚪ 회색: 정전 (No Power Source)</div>
+      <p><small>* 노드를 클릭하여 차단기를 토글하세요.</small></p>
+    </div>
+  </div>
+  <div id="cy"></div>
+
+  <script>
+    let cy;
+
+    document.addEventListener('DOMContentLoaded', function(){
+      google.script.run.withSuccessHandler(initGraph).getTreeData();
+    });
+
+    function initGraph(elements) {
+      // Dagre 레이아웃 등록
+      if(typeof cytoscapeDagre !== 'undefined') cytoscape-dagre(cytoscape);
+
+      cy = cytoscape({
+        container: document.getElementById('cy'),
+        elements: elements,
+        style: [
+          { selector: 'node', style: {
+            'label': 'data(label)',
+            'font-size': '8px', 'width': '40px', 'height': '40px',
+            'background-color': '#ccc', 'color': '#333',
+            'text-valign': 'bottom', 'text-margin-y': '5px'
+          }},
+          { selector: 'node[?is_powered]', style: { 'background-color': '#2ecc40' }},
+          { selector: 'node[!is_breaker_closed]', style: { 'background-color': '#ff4136', 'border-width': 3, 'border-color': '#333' }},
+          { selector: 'edge', style: {
+            'width': 2, 'line-color': '#ddd', 'target-arrow-shape': 'triangle', 'target-arrow-color': '#ddd', 'curve-style': 'bezier'
+          }},
+          { selector: 'edge[?is_live]', style: { 'line-color': '#2ecc40', 'target-arrow-color': '#2ecc40', 'width': 3 }}
+        ],
+        layout: { name: 'dagre', rankDir: 'LR', nodeSep: 50, rankSep: 100 }
+      });
+
+      // 초기 상태 설정
+      cy.nodes().data('is_breaker_closed', true);
+      
+      // 최상위 노드 자동 판별 (공급받는 곳이 없는 노드들)
+      cy.nodes().forEach(node => {
+        if (node.indegree() === 0) node.data('is_root', true);
+      });
+
+      updatePowerFlow();
+
+      // 클릭 시 차단기 상태 토글
+      cy.on('tap', 'node', function(evt){
+        const node = evt.target;
+        node.data('is_breaker_closed', !node.data('is_breaker_closed'));
+        updatePowerFlow();
+      });
+    }
+
+    // 전력 흐름 엔진 (BFS 기반 다중 경로 계산)
+    function updatePowerFlow() {
+      // 1. 초기화
+      cy.nodes().data('is_powered', false);
+      cy.edges().data('is_live', false);
+
+      // 2. 최상위(Root) 중 차단기가 닫힌 곳부터 시작
+      let roots = cy.nodes('[is_root]').filter(n => n.data('is_breaker_closed'));
+      
+      // 3. 탐색을 통해 전파 (다중 연결 지원)
+      let queue = roots.toArray();
+      roots.data('is_powered', true);
+
+      while(queue.length > 0) {
+        let curr = queue.shift();
+        
+        // 현재 노드의 하위 연결선들 확인
+        curr.outgoers('edge').forEach(edge => {
+          let target = edge.target();
+          // 내 차단기가 닫혀 있고, 타겟 차단기도 닫혀 있다면 전기가 흐름
+          if (curr.data('is_breaker_closed') && !target.data('is_powered')) {
+            edge.data('is_live', true);
+            target.data('is_powered', true);
+            queue.push(target);
+          } else if (curr.data('is_breaker_closed') && target.data('is_powered')) {
+            // 이미 전원이 공급된 노드라도 경로는 표시 (다중 공급)
+            edge.data('is_live', true);
+          }
+        });
+      }
+    }
+  </script>
+</body>
+</html>
