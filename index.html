@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Power Tree Simulator</title>
+
+  <!-- PWA 전체화면 설치용 manifest -->
+  <link rel="manifest" href="manifest.json">
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.23.0/cytoscape.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/dagre/0.8.5/dagre.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/cytoscape-dagre@2.5.0/cytoscape-dagre.min.js"></script>
+
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; overflow: hidden; background: #f0f2f5; }
+
+    #cy { width: 100vw; height: 100vh; }
+
+    #panel {
+      position: absolute; top: 12px; left: 12px; z-index: 10;
+      background: rgba(255,255,255,0.96);
+      padding: 14px 16px; border-radius: 10px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+      border: 1px solid #dde; min-width: 200px;
+    }
+    #panel h3 { margin: 0 0 10px; font-size: 15px; color: #222; }
+    .legend { font-size: 12px; line-height: 1.9; color: #444; }
+    .legend span { display: inline-block; width: 12px; height: 12px;
+                   border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+    .dot-green { background: #2ecc40; }
+    .dot-red   { background: #ff4136; border: 2px solid #333; }
+    .dot-gray  { background: #aab; }
+    .hint { font-size: 11px; color: #888; margin-top: 8px; border-top: 1px solid #eee; padding-top: 6px; }
+
+    #tooltip {
+      position: absolute; z-index: 20; display: none;
+      background: rgba(30,30,40,0.92); color: #fff;
+      font-size: 12px; padding: 8px 12px; border-radius: 7px;
+      pointer-events: none; max-width: 220px; line-height: 1.6;
+      box-shadow: 0 3px 10px rgba(0,0,0,0.3);
+    }
+
+    #statusbar {
+      position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%);
+      z-index: 10; background: rgba(255,255,255,0.92);
+      padding: 6px 18px; border-radius: 20px;
+      font-size: 12px; color: #444;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      white-space: nowrap;
+    }
+
+    /* 로딩 오버레이 */
+    #loading {
+      position: absolute; inset: 0; z-index: 100;
+      background: #f0f2f5; display: flex;
+      flex-direction: column; align-items: center; justify-content: center;
+      font-size: 16px; color: #555; gap: 12px;
+    }
+    #loading.hidden { display: none; }
+    .spinner {
+      width: 40px; height: 40px;
+      border: 4px solid #ddd; border-top-color: #2ecc40;
+      border-radius: 50%; animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+  <!-- 로딩 화면 -->
+  <div id="loading">
+    <div class="spinner"></div>
+    <div>스프레드시트 데이터 로딩 중…</div>
+  </div>
+
+  <div id="panel">
+    <h3>⚡ Power Tree Simulator</h3>
+    <div class="legend">
+      <div><span class="dot-green"></span>전원 공급 중 (Active)</div>
+      <div><span class="dot-red"></span>차단기 개방 (Breaker OFF)</div>
+      <div><span class="dot-gray"></span>전원 없음 (No Power)</div>
+    </div>
+    <div class="hint">
+      🖱 노드 클릭 → 차단기 토글<br>
+      🔍 스크롤 → 줌 / 드래그 → 이동
+    </div>
+  </div>
+
+  <div id="tooltip"></div>
+  <div id="statusbar">데이터 로딩 중…</div>
+  <div id="cy"></div>
+
+  <script>
+  // ★★★ GAS 웹앱 배포 URL을 여기에 붙여넣으세요 ★★★
+  const GAS_API_URL = "https://script.google.com/macros/s/여기에_배포_ID_입력/exec";
+
+  let cy;
+  const tooltip   = document.getElementById('tooltip');
+  const statusbar = document.getElementById('statusbar');
+  const loading   = document.getElementById('loading');
+
+  // ── 진입점: GAS API에서 데이터 fetch ──────────────────────
+  document.addEventListener('DOMContentLoaded', async function () {
+    if (typeof cytoscapeDagre !== 'undefined') {
+      cytoscapeDagre(cytoscape);
+    }
+
+    try {
+      const res  = await fetch(GAS_API_URL);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      loading.classList.add('hidden');
+      initGraph(data);
+    } catch (err) {
+      loading.innerHTML = `<div style="color:#e74c3c">❌ 데이터 로드 실패<br><small>${err.message}</small><br><br><small>GAS_API_URL을 확인하세요</small></div>`;
+    }
+  });
+
+  // ── 그래프 초기화 ───────────────────────────────────────────
+  function initGraph(elements) {
+    if (!elements || !elements.nodes || !elements.nodes.length) {
+      loading.innerHTML = '<div style="color:#e67e22">⚠️ 스프레드시트에 데이터가 없습니다.</div>';
+      loading.classList.remove('hidden');
+      return;
+    }
+
+    cy = cytoscape({
+      container: document.getElementById('cy'),
+      elements: elements,
+      style: [
+        {
+          selector: 'node',
+          style: {
+            'label': 'data(label)',
+            'font-size': '9px', 'font-weight': 'bold',
+            'width': '44px', 'height': '44px',
+            'background-color': '#aabbcc',
+            'color': '#333',
+            'text-valign': 'bottom', 'text-halign': 'center',
+            'text-margin-y': '5px',
+            'text-wrap': 'wrap', 'text-max-width': '60px',
+            'border-width': 1, 'border-color': '#899'
+          }
+        },
+        {
+          selector: 'node[?is_powered]',
+          style: {
+            'background-color': '#2ecc40',
+            'border-color': '#27ae60', 'border-width': 1,
+            'color': '#145a20'
+          }
+        },
+        {
+          selector: 'node[is_breaker_closed = 0]',
+          style: {
+            'background-color': '#ff4136',
+            'border-width': 3, 'border-color': '#333',
+            'color': '#7a0000'
+          }
+        },
+        {
+          selector: 'edge',
+          style: {
+            'width': 1.5, 'line-color': '#ccd',
+            'target-arrow-shape': 'triangle', 'target-arrow-color': '#ccd',
+            'curve-style': 'bezier', 'opacity': 0.6
+          }
+        },
+        {
+          selector: 'edge[?is_live]',
+          style: {
+            'width': 3, 'line-color': '#2ecc40',
+            'target-arrow-color': '#2ecc40', 'opacity': 1
+          }
+        },
+        { selector: 'node:active', style: { 'overlay-opacity': 0.2 } }
+      ],
+      layout: {
+        name: 'dagre', rankDir: 'LR',
+        nodeSep: 55, rankSep: 120, padding: 40
+      }
+    });
+
+    cy.nodes().forEach(node => {
+      node.data('is_breaker_closed', 1);
+      if (node.indegree() === 0) node.data('is_root', true);
+    });
+
+    updatePowerFlow();
+    updateStatusBar();
+
+    cy.on('tap', 'node', function (evt) {
+      const node = evt.target;
+      node.data('is_breaker_closed', node.data('is_breaker_closed') ? 0 : 1);
+      updatePowerFlow();
+      updateStatusBar();
+    });
+
+    cy.on('mouseover', 'node', function (evt) {
+      const node = evt.target;
+      const pos  = evt.renderedPosition || evt.position;
+      const d    = node.data();
+      const state = d.is_breaker_closed
+        ? (d.is_powered ? '🟢 전원 공급 중' : '⚪ 전원 없음')
+        : '🔴 차단기 개방';
+      tooltip.innerHTML =
+        `<b>${d.id}</b><br>` +
+        (d.loc  ? `📍 ${d.loc}<br>`  : '') +
+        (d.desc ? `📝 ${d.desc}<br>` : '') +
+        (d.ckt  ? `🔌 CKT: ${d.ckt}<br>` : '') +
+        `상태: ${state}`;
+      tooltip.style.display = 'block';
+      tooltip.style.left = (pos.x + 15) + 'px';
+      tooltip.style.top  = (pos.y - 10) + 'px';
+    });
+
+    cy.on('mouseout', 'node', () => { tooltip.style.display = 'none'; });
+    cy.on('mousemove', 'node', function (evt) {
+      const pos = evt.renderedPosition || evt.position;
+      tooltip.style.left = (pos.x + 15) + 'px';
+      tooltip.style.top  = (pos.y - 10) + 'px';
+    });
+  }
+
+  function updatePowerFlow() {
+    cy.nodes().data('is_powered', false);
+    cy.edges().data('is_live', false);
+
+    const roots = cy.nodes('[is_root]').filter(n => n.data('is_breaker_closed') === 1);
+    roots.data('is_powered', true);
+    const queue = roots.toArray();
+
+    while (queue.length > 0) {
+      const curr = queue.shift();
+      if (curr.data('is_breaker_closed') !== 1) continue;
+
+      curr.outgoers('edge').forEach(edge => {
+        const target = edge.target();
+        if (target.data('is_breaker_closed') !== 1) return;
+        edge.data('is_live', true);
+        if (!target.data('is_powered')) {
+          target.data('is_powered', true);
+          queue.push(target);
+        }
+      });
+    }
+  }
+
+  function updateStatusBar() {
+    if (!cy) return;
+    const total   = cy.nodes().length;
+    const powered = cy.nodes('[?is_powered]').length;
+    const open    = cy.nodes('[is_breaker_closed = 0]').length;
+    statusbar.textContent = `전체 ${total}개 | 🟢 전원 ${powered}개 | 🔴 개방 ${open}개`;
+  }
+  </script>
+</body>
+</html>
