@@ -671,6 +671,9 @@ function expandFromNode(id, resetHistory) {
   updateStatusBar();
 }
 
+
+
+<!--  
 /* ── 방사형 배치 ── */
 function applyRadialLayout(centerId, neighborIds) {
   if (!cy) return;
@@ -689,6 +692,13 @@ function applyRadialLayout(centerId, neighborIds) {
   }
   cn.position({ x: cx, y: cy_ });
 
+
+
+
+
+
+
+  
   // 이웃 배치
   const count = neighborIds.length;
   if (count === 0) return;
@@ -708,6 +718,48 @@ function applyRadialLayout(centerId, neighborIds) {
   });
 }
 
+-->
+
+//아래로 배열
+
+function applyTreeLayoutMultiRow(centerId, neighborIds) {
+  if (!cy) return;
+  const cn = cy.getElementById(centerId);
+
+  let cx, cy_;
+  if (!cn.data('is_hidden')) {
+    cx  = cn.position('x');
+    cy_ = cn.position('y');
+  } else {
+    const ext = cy.extent();
+    cx  = (ext.x1 + ext.x2) / 2;
+    cy_ = (ext.y1 + ext.y2) / 2;
+  }
+
+  cn.position({ x: cx, y: cy_ });
+
+  const gapX = 120;
+  const gapY = 140;
+  const perRow = 6; // 한 줄 최대 개수
+
+  neighborIds.forEach((nid, i) => {
+    const n = cy.getElementById(nid);
+    if (!n.length || !n.data('is_hidden')) return;
+
+    const row = Math.floor(i / perRow);
+    const col = i % perRow;
+
+    const rowCount = Math.min(perRow, neighborIds.length - row * perRow);
+    const startX = cx - ((rowCount - 1) * gapX) / 2;
+
+    n.position({
+      x: startX + col * gapX,
+      y: cy_ + gapY * (row + 1)
+    });
+  });
+}
+
+  
 
 /* ── 현재 보이는 노드 위치 스냅샷 ── */
 function capturePositions() {
