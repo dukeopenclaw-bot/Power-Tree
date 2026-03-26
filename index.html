@@ -676,7 +676,7 @@ function expandFromNode(id, resetHistory) {
      
  
 /* ── 방사형 배치 ── */
- /* ══════════════════════════════════════
+
   
 function applyRadialLayout(centerId, neighborIds) {
   if (!cy) return;
@@ -701,72 +701,24 @@ function applyRadialLayout(centerId, neighborIds) {
   const count = neighborIds.length;
   if (count === 0) return;
 
-    neighborIds.forEach((nid, i) => {
-    const n = cy.getElementById(nid);
-    if (!n.length || !n.data('is_hidden')) return;
-
-    // ⬇⬇⬇ 핵심 변경 부분 ⬇⬇⬇
-    const angle  = Math.PI * (i / Math.max(count - 1, 1)); // 0 ~ π
-    const radius = RADIAL_BASE + Math.floor(i / 12) * RADIAL_EXTRA;
-
-    n.position({
-      x: cx + radius * Math.cos(angle - Math.PI / 2),
-      y: cy_ + radius * Math.sin(angle - Math.PI / 2),
-    });
-  });
-}
-
-   ══════════════════════════════════════ */
-
-//아래로 배열
-
-
-/* ── 아래 방향 / 행 기준 Grid 배치 (안정판) ── */
-function applyVerticalRowLayout(centerId, neighborIds) {
-  if (!cy) return;
-
-  const center = cy.getElementById(centerId);
-
-  // 중심 좌표
-  let cx, cy_;
-  if (!center.data('is_hidden')) {
-    cx  = center.position('x');
-    cy_ = center.position('y');
-  } else {
-    const ext = cy.extent();
-    cx  = (ext.x1 + ext.x2) / 2;
-    cy_ = (ext.y1 + ext.y2) / 2;
-  }
-
-  center.position({ x: cx, y: cy_ });
-
-  if (!neighborIds.length) return;
-
-  const MAX_PER_ROW = 10;
-  const COL_GAP     = 140;
-  const ROW_GAP     = 100;
-  const START_Y     = 120;
-
   neighborIds.forEach((nid, i) => {
     const n = cy.getElementById(nid);
     if (!n.length) return;
+    // 이미 화면에 있으면 위치 유지 (자연스러운 확장)
+    if (!n.data('is_hidden')) return;
 
-    const row = Math.floor(i / MAX_PER_ROW);
-    const col = i % MAX_PER_ROW;
-
-    const rowCount = Math.min(
-      MAX_PER_ROW,
-      neighborIds.length - row * MAX_PER_ROW
-    );
-
-    const startX = cx - ((rowCount - 1) * COL_GAP) / 2;
-
+    const angle  = (2 * Math.PI * i) / count - Math.PI / 2;
+    const radius = RADIAL_BASE + Math.floor(i / 12) * RADIAL_EXTRA;
     n.position({
-      x: startX + col * COL_GAP,
-      y: cy_ + START_Y + row * ROW_GAP,
+      x: cx + radius * Math.cos(angle),
+      y: cy_ + radius * Math.sin(angle),
     });
   });
 }
+
+
+
+
   
 
 /* ── 현재 보이는 노드 위치 스냅샷 ── */
