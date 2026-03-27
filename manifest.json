@@ -1,11 +1,12 @@
 {
-  "name": "Power Searcher PWA",
+  "name": "Power Tree Viewer",
   "short_name": "PowerTree",
   "description": "전기 계통 파워트리 조회 시스템",
   "start_url": "./index.html",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#2196F3",
+  "orientation": "landscape",
+  "background_color": "#0f1923",
+  "theme_color": "#1a8fe3",
   "icons": [
     {
       "src": "https://cdn-icons-png.flaticon.com/512/10002/10002633.png",
