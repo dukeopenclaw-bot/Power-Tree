@@ -1,29 +1,40 @@
+/* style.css - 시인성 개선 버전 */
+
 /* ─── Reset & Base ─── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --bg: #0f1923;
-  --sidebar-bg: #111b26;
-  --sidebar-border: #1e3048;
-  --accent: #1a8fe3;
-  --accent-dim: #0e5a96;
-  --text: #c8d8e8;
-  --text-dim: #6a8aaa;
-  --node-from: #0e4266;
-  --node-center: #1a3a5c;
-  --node-to: #0a2a42;
-  --node-stroke-from: #2a9fd6;
-  --node-stroke-center: #f0a500;
-  --node-stroke-to: #2a9fd6;
-  --edge: #2a6080;
-  --edge-highlight: #1a8fe3;
-  --label: #f0c040;
-  --hover: #1e3a56;
-  --result-hover: #162840;
-  --status-ok: #2ecc71;
-  --status-err: #e74c3c;
-  --status-load: #f39c12;
-  font-family: 'Courier New', 'Consolas', monospace;
+  /* 배경색을 약간 밝은 회색으로 변경하여 검은색 아이콘/글자와 대비 */
+  --bg: #f4f7f6;
+  --sidebar-bg: #ffffff;
+  --sidebar-border: #d1d9e0;
+  --accent: #007bff; /* 명확한 파란색 */
+  --accent-dim: #b3d7ff;
+  --text: #333333; /* 짙은 회색 글자 */
+  --text-dim: #6c757d;
+  
+  /* 노드 색상 개선 (밝은 배경에 맞춥니다) */
+  --node-from: #e3f2fd;       /* 아주 밝은 파랑 */
+  --node-center: #fff9c4;     /* 아주 밝은 노랑 */
+  --node-to: #f1f8e9;         /* 아주 밝은 초록 */
+  
+  --node-stroke-from: #1e88e5;
+  --node-stroke-center: #fbc02d;
+  --node-stroke-to: #7cb342;
+  
+  /* 선 및 라벨 색상 */
+  --edge: #546e7a;            /* 짙은 청회색 선 */
+  --edge-highlight: #007bff;
+  --label: #d32f2f;           /* 빨간색 라벨로 시인성 확보 */
+  
+  --hover: #e8f0fe;
+  --result-hover: #f1f3f4;
+  
+  --status-ok: #28a745;
+  --status-err: #dc3545;
+  --status-load: #ffc107;
+  
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
 
 html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(--text); }
@@ -33,28 +44,29 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 
 /* ─── Sidebar ─── */
 #sidebar {
-  width: 260px;
-  min-width: 220px;
-  max-width: 320px;
+  width: 280px;
+  min-width: 240px;
+  max-width: 360px;
   display: flex;
   flex-direction: column;
   background: var(--sidebar-bg);
   border-right: 1px solid var(--sidebar-border);
   z-index: 10;
+  box-shadow: 2px 0 5px rgba(0,0,0,0.05);
 }
 
 .sidebar-header {
-  padding: 14px 14px 10px;
+  padding: 16px;
   border-bottom: 1px solid var(--sidebar-border);
-  background: #0a1520;
+  background: #f8f9fa;
 }
 
 .sidebar-header h1 {
-  font-size: 13px;
+  font-size: 16px;
   font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--accent);
+  color: #333;
+							
+					   
   display: flex;
   align-items: center;
   gap: 8px;
@@ -62,26 +74,26 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 
 .sidebar-header h1::before {
   content: '⚡';
-  font-size: 16px;
+  color: var(--status-load);
 }
 
-.search-box { padding: 12px; }
+.search-box { padding: 14px; }
 
 #searchInput {
   width: 100%;
-  padding: 8px 12px;
-  background: #0a1520;
-  border: 1px solid var(--sidebar-border);
+  padding: 10px 14px;
+  background: #fff;
+  border: 1px solid #ced4da;
   border-radius: 4px;
-  color: var(--text);
-  font-size: 12px;
-  font-family: inherit;
+  color: #333;
+  font-size: 14px;
+					   
   outline: none;
-  transition: border-color 0.15s;
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
 
-#searchInput::placeholder { color: var(--text-dim); }
-#searchInput:focus { border-color: var(--accent); }
+#searchInput::placeholder { color: #ADB5BD; }
+#searchInput:focus { border-color: var(--accent); box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25); }
 
 #resultList {
   flex: 1;
@@ -90,32 +102,35 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
   border-top: 1px solid var(--sidebar-border);
 }
 
-#resultList::-webkit-scrollbar { width: 4px; }
+/* 스크롤바 스타일 */
+#resultList::-webkit-scrollbar { width: 6px; }
 #resultList::-webkit-scrollbar-track { background: transparent; }
-#resultList::-webkit-scrollbar-thumb { background: var(--sidebar-border); border-radius: 2px; }
+#resultList::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 3px; }
 
 #resultList li {
-  padding: 9px 14px;
-  font-size: 11px;
-  border-bottom: 1px solid rgba(30, 48, 72, 0.5);
+  padding: 12px 16px;
+  font-size: 13px;
+  border-bottom: 1px solid #eee;
   cursor: pointer;
   transition: background 0.1s;
-  line-height: 1.5;
+				   
 }
 
-#resultList li:hover { background: var(--result-hover); color: #fff; }
+																	  
 
-#resultList li .tag { font-weight: 700; color: var(--accent); display: block; }
-#resultList li .desc { color: var(--text-dim); font-size: 10px; }
+#resultList li:hover { background: var(--result-hover); }
+#resultList li .tag { font-weight: 600; color: #000; display: block; margin-bottom: 2px; }
+#resultList li .desc { color: var(--text-dim); font-size: 12px; }
 
 /* ─── Status bar ─── */
 #status {
-  padding: 8px 14px;
-  font-size: 11px;
+  padding: 10px 16px;
+  font-size: 12px;
   border-top: 1px solid var(--sidebar-border);
+  background: #f8f9fa;
   display: none;
 }
-#status.loading { color: var(--status-load); }
+#status.loading { color: var(--status-load); font-weight: 600; }
 #status.success { color: var(--status-ok); }
 #status.error   { color: var(--status-err); }
 
@@ -124,11 +139,14 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
   flex: 1;
   position: relative;
   overflow: hidden;
-  background:
-    linear-gradient(rgba(26,143,227,0.04) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(26,143,227,0.04) 1px, transparent 1px),
-    var(--bg);
-  background-size: 40px 40px;
+  /* 배경 격자무늬 스타일 변경 */
+  background-image: 
+    linear-gradient(45deg, #e6e6e6 25%, transparent 25%), 
+    linear-gradient(-45deg, #e6e6e6 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #e6e6e6 75%),
+    linear-gradient(-45deg, transparent 75%, #e6e6e6 75%);
+  background-size: 20px 20px;
+  background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
 }
 
 #tree-svg { width: 100%; height: 100%; display: block; }
@@ -140,51 +158,53 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
   left: 50%;
   transform: translate(-50%, -50%);
   text-align: center;
-  color: var(--text-dim);
+  color: #666;
   pointer-events: none;
-  transition: opacity 0.3s;
+  background: rgba(255,255,255,0.8);
+  padding: 20px;
+  border-radius: 8px;
 }
-#hint.hidden { opacity: 0; }
-#hint .hint-icon { font-size: 48px; opacity: 0.3; }
-#hint p { font-size: 12px; letter-spacing: 0.06em; margin-top: 10px; }
+							
+#hint .hint-icon { font-size: 64px; margin-bottom: 10px; }
+#hint p { font-size: 14px; line-height: 1.6; }
 
 /* ─── Toolbar ─── */
 #toolbar {
   position: absolute;
-  bottom: 16px;
-  right: 16px;
+  bottom: 20px;
+  right: 20px;
   display: flex;
-  flex-direction: column;
-  gap: 6px;
+						 
+  gap: 8px;
   z-index: 20;
 }
 
 #toolbar button {
-  width: 36px;
-  height: 36px;
-  background: rgba(15, 25, 35, 0.9);
-  border: 1px solid var(--sidebar-border);
+  width: 40px;
+  height: 40px;
+  background: #fff;
+  border: 1px solid #ced4da;
   border-radius: 4px;
-  color: var(--text);
-  font-size: 16px;
+  color: #333;
+  font-size: 18px;
   cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: border-color 0.15s, color 0.15s;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+  transition: all 0.2s;
+						  
+											  
 }
-#toolbar button:hover { border-color: var(--accent); color: var(--accent); }
+#toolbar button:hover { border-color: var(--accent); color: var(--accent); transform: translateY(-2px); }
 
 /* ─── SVG Node Styles ─── */
 .node rect {
-  stroke-width: 1.5;
-  rx: 5;
-  transition: filter 0.15s;
+  stroke-width: 2;
+  rx: 6;
+  fill: #fff; /* 기본 채우기 화이트 */
 }
 .node.node-center rect {
   fill: var(--node-center);
   stroke: var(--node-stroke-center);
-  stroke-width: 2;
+				  
 }
 .node.node-from rect {
   fill: var(--node-from);
@@ -194,51 +214,76 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
   fill: var(--node-to);
   stroke: var(--node-stroke-to);
 }
-.node:hover rect { filter: brightness(1.4); }
-.node text { fill: var(--text); font-family: 'Courier New', monospace; }
-.node.node-center text { fill: #ffd980; font-weight: 700; }
+.node text { 
+  fill: #000; /* 글자색 검은색 */
+  font-family: sans-serif; 
+  font-size: 12px;
+  font-weight: 500;
+}
+.node.node-center text { font-weight: 700; }
 
 /* ─── SVG Edge Styles ─── */
 .link {
   fill: none;
   stroke: var(--edge);
-  stroke-width: 1.5;
+  stroke-width: 2;
+  stroke-linejoin: round;
 }
 
 /* ─── CKT Label Styles ─── */
 .ckt-label {
-  font-size: 10px;
-  fill: var(--label);
-  font-family: 'Courier New', monospace;
+  font-size: 11px;
+  fill: var(--label); /* 빨간색 라벨 */
+  font-family: sans-serif;
   font-weight: 600;
   pointer-events: none;
+  background: rgba(255,255,255,0.7); /* 라벨 배경 살짝 */
 }
 
 /* ─── Legend ─── */
 #legend {
   position: absolute;
-  top: 12px;
-  right: 12px;
-  background: rgba(10, 21, 32, 0.85);
-  border: 1px solid var(--sidebar-border);
+  top: 20px;
+  right: 20px;
+  background: #fff;
+  border: 1px solid #ced4da;
   border-radius: 4px;
-  padding: 10px 14px;
-  font-size: 10px;
-  color: var(--text-dim);
-  line-height: 2;
-  pointer-events: none;
+  padding: 12px 16px;
+  font-size: 12px;
+  color: #333;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+					   
 }
-#legend .leg-row { display: flex; align-items: center; gap: 8px; }
+#legend .leg-row { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+#legend .leg-row:last-child { margin-bottom: 0; }
 #legend .leg-box {
-  width: 14px; height: 10px; border-radius: 2px; border: 1.5px solid;
-  flex-shrink: 0;
+  width: 16px; height: 12px; border-radius: 2px; border: 2px solid;
+				 
 }
 #legend .leg-center { background: var(--node-center); border-color: var(--node-stroke-center); }
 #legend .leg-from   { background: var(--node-from);   border-color: var(--node-stroke-from); }
 #legend .leg-to     { background: var(--node-to);     border-color: var(--node-stroke-to); }
 
-/* ─── Mobile ─── */
+/* ─── Mobile (모바일 최적화) ─── */
 @media (max-width: 600px) {
-  #sidebar { width: 200px; }
-  #legend  { display: none; }
-}
+  /* 사이드바 너비를 줄여서 트리 화면 확보 */
+  #sidebar { 
+    width: 180px; 
+    min-width: 150px;
+  }
+  
+  /* 화면이 좁은 모바일에서는 범례(Legend)를 숨겨 시야 방해 제거 */
+  #legend { 
+    display: none; 
+  }
+  
+  /* 모바일에서 글자 크기 미세 조정 */
+  #searchInput {
+    padding: 8px;
+    font-size: 13px;
+  }
+}								
+						   
+							
+							 
+ 
