@@ -11,9 +11,9 @@
 // ── 레이아웃 및 환경 설정 ─────────────────────────────────────
 const NODE_W = 140;      // 노드 너비
 const NODE_H = 46;       // 노드 높이
-const H_GAP = 40;        // 노드 간 수평 간격
-const V_GAP = 150;       // 레벨 간 수직 간격
-const ITEMS_PER_ROW = 4; // To 장비 한 행당 최대 개수
+const H_GAP = 60;        // 노드 간 수평 간격
+const V_GAP = 180;       // 레벨 간 수직 간격
+const ITEMS_PER_ROW = 3; // To 장비 한 행당 최대 개수
 
 let nodeMap = {};        // 현재 화면의 노드 좌표 저장 { tag: {x, y, type, data} }
 let labelVisible = {};   // CKT 라벨 표시 상태
@@ -135,11 +135,26 @@ function drawTree(targetTag) {
 
 // ── 2. 유틸리티 함수 및 드래그 로직 ───────────────────────────
 
+//  경로 계산 함수
+
 function calculateOrthogonalPath(fn, tn) {
-    const x1 = fn.x, y1 = fn.y + NODE_H / 2;
-    const x2 = tn.x, y2 = tn.y - NODE_H / 2;
+    const x1 = fn.x;
+    const y1 = fn.y + NODE_H / 2; // From 노드 하단
+    const x2 = tn.x;
+    const y2 = tn.y - NODE_H / 2; // To 노드 상단
+    
+    // ── 겹침 방지 핵심 로직 ────────────────────────────────
+    // 모든 선이 같은 높이에서 꺾이지 않도록 
+    // 목적지(tn)의 X 좌표나 순번에 따라 꺾임 위치(offset)를 다르게 줍니다.
     const midY = (y1 + y2) / 2;
-    return `M${x1},${y1} V${midY} H${x2} V${y2}`;
+    
+    // 노드의 X 위치에 따라 꺾이는 지점을 +- 20px 정도 분산시킵니다.
+    // 이렇게 하면 수평선들이 서로 위아래로 빗겨나가게 됩니다.
+    const spread = (x2 - fn.x) * 0.1; 
+    const adaptiveMidY = midY + (Math.sin(x2) * 10); // 사인 함수를 이용한 미세 분산
+
+    // 경로 생성: 수직(V) -> 수평(H) -> 수직(V)
+    return `M${x1},${y1} V${adaptiveMidY} H${x2} V${y2}`;
 }
 
 function getLabelText(edge) {
