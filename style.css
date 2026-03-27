@@ -3,6 +3,44 @@
 /* ─── Reset & Base ─── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* style.css 상단 :root 부분을 아래 내용으로 교체 */
+:root {
+  --bg: #f8f9fa;              /* 메인 배경: 아주 밝은 회색 */
+  --sidebar-bg: #ffffff;      /* 사이드바: 흰색 */
+  --sidebar-border: #dee2e6;  /* 경계선: 연한 회색 */
+  --accent: #0056b3;          /* 강조색: 짙은 파랑 */
+  --accent-dim: #e7f1ff;
+  --text: #212529;            /* 기본 글자: 검은색에 가까운 회색 */
+  --text-dim: #6c757d;        /* 보조 글자: 중간 회색 */
+  
+  /* 노드(장비) 색상 - 파스텔톤으로 변경하여 눈 피로 감소 */
+  --node-from: #e3f2fd;       /* 공급(From): 연한 하늘색 */
+  --node-center: #fff9c4;     /* 선택(Center): 연한 노란색 */
+  --node-to: #f1f8e9;         /* 부하(To): 연한 녹색 */
+  
+  --node-stroke-from: #1e88e5;
+  --node-stroke-center: #fbc02d;
+  --node-stroke-to: #7cb342;
+  
+  --edge: #495057;            /* 연결선: 짙은 회색 */
+  --edge-highlight: #007bff;
+  --label: #dc3545;           /* CKT 라벨: 빨간색 (시인성 확보) */
+  
+  --hover: #f1f3f4;
+  --result-hover: #e8f0fe;
+  
+  --status-ok: #28a745;
+  --status-err: #dc3545;
+  --status-load: #ffc107;
+  
+  /* 폰트 가독성 향상 */
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+
+
+/*
+
 :root {
   /* 배경색을 약간 밝은 회색으로 변경하여 검은색 아이콘/글자와 대비 */
   --bg: #f4f7f6;
@@ -33,9 +71,11 @@
   --status-ok: #28a745;
   --status-err: #dc3545;
   --status-load: #ffc107;
-  
+*/
+/*
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
+*/
 
 html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(--text); }
 
@@ -135,11 +175,15 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 #status.error   { color: var(--status-err); }
 
 /* ─── Canvas ─── */
+
+/*
 #canvas-container {
   flex: 1;
   position: relative;
   overflow: hidden;
   /* 배경 격자무늬 스타일 변경 */
+*/
+/*
   background-image: 
     linear-gradient(45deg, #e6e6e6 25%, transparent 25%), 
     linear-gradient(-45deg, #e6e6e6 25%, transparent 25%),
@@ -148,6 +192,17 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
   background-size: 20px 20px;
   background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
 }
+*/
+/* 캔버스 배경 격자무늬 (라이트모드용 연한 격자) */
+#canvas-container {
+  background-color: var(--bg);
+  background-image: radial-gradient(#d1d1d1 1px, transparent 1px);
+  background-size: 30px 30px;
+}
+
+
+
+
 
 #tree-svg { width: 100%; height: 100%; display: block; }
 
@@ -196,11 +251,26 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 #toolbar button:hover { border-color: var(--accent); color: var(--accent); transform: translateY(-2px); }
 
 /* ─── SVG Node Styles ─── */
+
+/*
 .node rect {
   stroke-width: 2;
   rx: 6;
   fill: #fff; /* 기본 채우기 화이트 */
 }
+*/
+
+/* 노드 사각형에 가벼운 그림자 추가 */
+.node rect {
+  stroke-width: 1.5;
+  filter: drop-shadow(0px 2px 3px rgba(0,0,0,0.1));
+}
+
+
+
+
+
+
 .node.node-center rect {
   fill: var(--node-center);
   stroke: var(--node-stroke-center);
