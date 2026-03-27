@@ -1,31 +1,139 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Power Searcher PWA</title>
-    <link rel="manifest" href="manifest.json">
-    <link rel="stylesheet" href="style.css">
-    <script src="https://d3js.org/d3.v7.min.js"></script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#0f1923" />
+  <meta name="description" content="전기 계통 파워트리 조회 시스템" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>⚡ Power Tree</title>
+
+  <link rel="manifest" href="manifest.json" />
+  <link rel="stylesheet" href="style.css" />
+
+  <!-- D3.js -->
+  <script src="https://d3js.org/d3.v7.min.js"></script>
 </head>
 <body>
-    <div id="app">
-        <aside id="sidebar">
-            <div class="search-box">
-                <input type="text" id="searchInput" placeholder="장비 Tag 검색...">
-            </div>
-            <ul id="resultList"></ul>
-        </aside>
-        <main id="canvas-container">
-            <svg id="tree-svg"></svg>
-        </main>
+
+<div id="app">
+
+  <!-- ── 좌측 사이드바 ── -->
+  <aside id="sidebar">
+    <div class="sidebar-header">
+      <h1>Power Tree</h1>
     </div>
-    <script src="api.js"></script>
-    <script src="tree-viz.js"></script>
-    <script>
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('sw.js');
-        }
-    </script>
+
+    <div class="search-box">
+      <input
+        type="text"
+        id="searchInput"
+        placeholder="장비 Tag 검색 (예: MCC, EDB...)"
+        autocomplete="off"
+        spellcheck="false"
+      />
+    </div>
+
+    <ul id="resultList"></ul>
+
+    <div id="status"></div>
+  </aside>
+
+  <!-- ── 우측 캔버스 ── -->
+  <main id="canvas-container">
+
+    <!-- 초기 안내 -->
+    <div id="hint">
+      <div class="hint-icon">🔌</div>
+      <p>왼쪽 검색창에서 장비를 선택하면<br>파워트리가 표시됩니다</p>
+      <p style="margin-top:8px;font-size:10px;opacity:.6">
+        단클릭: CKT 정보 표시 &nbsp;|&nbsp; 더블클릭: 해당 장비 기준 재조회<br>
+        핀치/스크롤: 줌 &nbsp;|&nbsp; 드래그: 이동
+      </p>
+    </div>
+
+    <!-- SVG 캔버스 -->
+    <svg id="tree-svg"></svg>
+
+    <!-- 범례 -->
+    <div id="legend">
+      <div class="leg-row"><div class="leg-box leg-from"></div> 공급원 (From)</div>
+      <div class="leg-row"><div class="leg-box leg-center"></div> 선택 장비</div>
+      <div class="leg-row"><div class="leg-box leg-to"></div> 부하 (To)</div>
+    </div>
+
+    <!-- 줌 툴바 -->
+    <div id="toolbar">
+      <button title="줌 인"  onclick="zoomIn()">＋</button>
+      <button title="줌 아웃" onclick="zoomOut()">－</button>
+      <button title="화면 맞춤" onclick="zoomFit()">⊙</button>
+    </div>
+
+  </main>
+</div>
+
+<!--
+  ★ 로딩 순서 중요:
+  1. api.js  → powerData 전역 변수 선언 + 데이터 로드
+  2. tree-viz.js → powerData 사용 (drawTree 함수 정의)
+-->
+<script src="api.js"></script>
+<script src="tree-viz.js"></script>
+
+<script>
+  // ── PWA 서비스 워커 등록 ──────────────────────────
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('./sw.js')
+      .catch(err => console.warn('SW 등록 실패:', err));
+  }
+
+  // ── 툴바 줌 제어 ─────────────────────────────────
+  function getSvgZoom() {
+    return d3.zoom().on("zoom", e => {
+      d3.select("#main-g").attr("transform", e.transform);
+    });
+  }
+
+  function zoomIn() {
+    d3.select("#tree-svg").transition().duration(250)
+      .call(d3.zoom().scaleBy, 1.4);
+  }
+
+  function zoomOut() {
+    d3.select("#tree-svg").transition().duration(250)
+      .call(d3.zoom().scaleBy, 0.7);
+  }
+
+  function zoomFit() {
+    const svg = d3.select("#tree-svg");
+    const g   = svg.select("#main-g");
+    if (g.empty()) return;
+
+    const svgEl  = document.getElementById("tree-svg");
+    const W = svgEl.clientWidth, H = svgEl.clientHeight;
+
+    try {
+      const bbox = g.node().getBBox();
+      if (!bbox.width || !bbox.height) return;
+
+      const scale = Math.min(
+        0.9 * W / bbox.width,
+        0.9 * H / bbox.height,
+        1.5  // 최대 1.5배로 제한
+      );
+      const tx = W / 2 - scale * (bbox.x + bbox.width  / 2);
+      const ty = H / 2 - scale * (bbox.y + bbox.height / 2);
+
+      svg.transition().duration(400)
+        .call(
+          d3.zoom().transform,
+          d3.zoomIdentity.translate(tx, ty).scale(scale)
+        );
+    } catch (e) { /* BBox 실패 무시 */ }
+  }
+</script>
+
 </body>
 </html>
