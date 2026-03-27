@@ -226,9 +226,19 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 .link {
   fill: none;
   stroke: var(--edge);
-  stroke-width: 2;
+  stroke-width: 1.2; /* 선을 조금 더 얇게 */
+  stroke-opacity: 0.7; /* 약간 투명하게 하여 겹치는 구간 확인 가능하게 */
   stroke-linejoin: round;
+  transition: stroke 0.2s, stroke-width 0.2s;
 }
+
+/* 마우스를 올리면 해당 선만 강조 */
+.link:hover {
+  stroke: var(--accent);
+  stroke-width: 2.5;
+  stroke-opacity: 1;
+}
+
 
 /* ─── CKT Label Styles ─── */
 .ckt-label {
