@@ -1,264 +1,212 @@
 /**
  * tree-viz.js
- * 전기 파워트리 시각화
- *
- * ■ 노드 배치
- *   - 선택 장비: 화면 중앙
- *   - From 장비(공급원): 중앙 위쪽 (여러 행 가능)
- *   - To 장비(부하):  중앙 아래쪽 (여러 행 가능)
- *   - 화살표: 직각 꺾은선 (수직→수평→수직)
- *
- * ■ 클릭 동작
- *   - 1클릭  : 연결 화살표에 CKT 라벨 표시 (토글)
- *              From 측 라벨: "-XXX / CKT(From)" 또는 "CKT(From)"
- *              To 측 라벨:   "CKT(To)"
- *   - 2클릭 / 길게 누름 : 해당 장비 기준으로 트리 재그리기
+ * 전기 파워트리 시각화 엔진
+ * * 주요 기능:
+ * 1. 노드 배치: 중앙(선택 장비), 위(From), 아래(To - 다단 배치)
+ * 2. 시각화: 직각 꺾은선 화살표, 상태별 노드 색상
+ * 3. 이동: 노드 드래그 및 연결선 실시간 업데이트
+ * 4. 인터랙션: 클릭(정보 토글), 더블클릭/롱프레스(트리 재구성)
  */
 
-// ── 레이아웃 상수 ─────────────────────────────────────
-const NODE_W       = 140;   // 노드 너비
-const NODE_H       = 46;    // 노드 높이
-const H_GAP        = 36;    // 수평 노드 간격
-const V_GAP        = 130;   // 수직 레벨 간격
-const ITEMS_PER_ROW = 5;    // 행당 최대 노드 수
+// ── 레이아웃 및 환경 설정 ─────────────────────────────────────
+const NODE_W = 140;      // 노드 너비
+const NODE_H = 46;       // 노드 높이
+const H_GAP = 40;        // 노드 간 수평 간격
+const V_GAP = 150;       // 레벨 간 수직 간격
+const ITEMS_PER_ROW = 4; // To 장비 한 행당 최대 개수
 
-// ── 상태 ─────────────────────────────────────────────
-let labelVisible = {};  // { tag: boolean } – 라벨 표시 여부 상태
+let nodeMap = {};        // 현재 화면의 노드 좌표 저장 { tag: {x, y, type, data} }
+let labelVisible = {};   // CKT 라벨 표시 상태
 
-// ─────────────────────────────────────────────────────
-// drawTree : 메인 진입점
-// ─────────────────────────────────────────────────────
+// ── 1. 메인 그리기 함수 ───────────────────────────────────────
 function drawTree(targetTag) {
-  labelVisible = {};
+    const svg = d3.select("#tree-svg");
+    svg.selectAll("*").remove(); // 이전 트리 삭제
+    
+    nodeMap = {};
+    labelVisible = {};
 
-  const container = document.getElementById("canvas-container");
-  const W = container.clientWidth  || 800;
-  const H = container.clientHeight || 600;
+    // 데이터 필터링
+    const mainData = powerData.find(d => d["Equipment Tag(To)"] === targetTag) || 
+                   powerData.find(d => d["Equipment Tag(From)"] === targetTag);
+    if (!mainData && !targetTag) return;
 
-  const svg = d3.select("#tree-svg");
-  svg.selectAll("*").remove();
+    const fromTags = [...new Set(powerData.filter(d => d["Equipment Tag(To)"] === targetTag).map(d => d["Equipment Tag(From)"]))].filter(Boolean);
+    const toRows = powerData.filter(d => d["Equipment Tag(From)"] === targetTag);
 
-  // ── 화살표 마커 정의 ────────────────────────────────
-  const defs = svg.append("defs");
-  defs.append("marker")
-    .attr("id", "arrowhead")
-    .attr("viewBox", "0 -5 10 10")
-    .attr("refX", 9)
-    .attr("refY", 0)
-    .attr("markerWidth", 6)
-    .attr("markerHeight", 6)
-    .attr("orient", "auto")
-    .append("path")
-      .attr("d", "M0,-5L10,0L0,5")
-      .attr("fill", "#2a6080");
+    const container = document.getElementById("canvas-container");
+    const cx = container.clientWidth / 2;
+    const cy = container.clientHeight / 2;
 
-  // ── 줌/패닝 그룹 ────────────────────────────────────
-  const g = svg.append("g").attr("id", "main-g");
+    // ── 노드 좌표 계산 (Layout) ───────────────────────────────
+    // 1. 중앙 노드
+    nodeMap[targetTag] = { x: cx, y: cy, type: "center", tag: targetTag, data: mainData };
 
-  const zoomBehavior = d3.zoom()
-    .scaleExtent([0.15, 4])
-    .on("zoom", e => g.attr("transform", e.transform));
-
-  svg.call(zoomBehavior);
-  svg.on("dblclick.zoom", null); // SVG 더블클릭 줌 방지
-
-  // ── 데이터 조회 ─────────────────────────────────────
-  const norm = s => String(s || "").trim();
-  const tgt  = norm(targetTag);
-
-  /** 이 장비로 들어오는 연결 (위쪽 = 공급원) */
-  const fromRows = powerData.filter(d => norm(d["Equipment Tag(To)"]) === tgt);
-  /** 이 장비에서 나가는 연결 (아래쪽 = 부하) */
-  const toRows   = powerData.filter(d => norm(d["Equipment Tag(From)"]) === tgt);
-
-  const fromTags = unique(fromRows.map(d => norm(d["Equipment Tag(From)"])));
-  const toTags   = unique(toRows.map(d => norm(d["Equipment Tag(To)"])));
-
-  // ── 노드 위치 계산 ───────────────────────────────────
-  const cx = W / 2;
-  const cy = H / 2;
-
-  /**
-   * tags 배열을 여러 행으로 배치
-   * sign = -1: 위쪽(From), +1: 아래쪽(To)
-   */
-  function layoutTags(tags, sign) {
-    const rowCount = Math.ceil(tags.length / ITEMS_PER_ROW);
-    return tags.map((tag, i) => {
-      const row = Math.floor(i / ITEMS_PER_ROW);
-      const col = i % ITEMS_PER_ROW;
-      const totalInRow = Math.min(tags.length - row * ITEMS_PER_ROW, ITEMS_PER_ROW);
-      const rowW = totalInRow * NODE_W + (totalInRow - 1) * H_GAP;
-      const x = (cx - rowW / 2 + NODE_W / 2) + col * (NODE_W + H_GAP);
-
-      // sign < 0: 상단 → 맨 위 행부터 순서대로 배치
-      const levelFromCenter = sign < 0
-        ? (rowCount - row)   // -rowCount ... -1
-        : (row + 1);         //  1 ... rowCount
-
-      return { tag, x, y: cy + sign * levelFromCenter * V_GAP };
+    // 2. From 노드 (위쪽)
+    fromTags.forEach((tag, i) => {
+        const total = fromTags.length;
+        const x = cx + (i - (total - 1) / 2) * (NODE_W + H_GAP);
+        nodeMap[tag] = { x: x, y: cy - V_GAP, type: "from", tag: tag };
     });
-  }
 
-  const fromPositions = layoutTags(fromTags, -1);
-  const toPositions   = layoutTags(toTags,    1);
-
-  // nodeMap: tag → { x, y, type }
-  const nodeMap = {};
-  nodeMap[tgt] = { x: cx, y: cy, type: "center" };
-  fromPositions.forEach(p => { nodeMap[p.tag] = { x: p.x, y: p.y, type: "from" }; });
-  toPositions.forEach(p =>   { nodeMap[p.tag] = { x: p.x, y: p.y, type: "to"   }; });
-
-  // ── 엣지 목록 ───────────────────────────────────────
-  const edges = [];
-  const addEdges = rows => {
-    rows.forEach(row => {
-      const ft = norm(row["Equipment Tag(From)"]);
-      const tt = norm(row["Equipment Tag(To)"]);
-      if (!ft || !tt || !nodeMap[ft] || !nodeMap[tt]) return;
-      // 중복 엣지 방지 (같은 From-To 조합)
-      const key = `${ft}→${tt}`;
-      if (!edges.find(e => e.key === key)) {
-        edges.push({
-          key,
-          fromTag: ft, toTag: tt,
-          cktFrom: norm(row["CKT(From)"]),
-          cktTo:   norm(row["CKT(To)"])
-        });
-      }
+    // 3. To 노드 (아래쪽, 다단 배치)
+    toRows.forEach((d, i) => {
+        const row = Math.floor(i / ITEMS_PER_ROW);
+        const col = i % ITEMS_PER_ROW;
+        const rowCount = Math.min(toRows.length - row * ITEMS_PER_ROW, ITEMS_PER_ROW);
+        const startX = cx - ((rowCount - 1) * (NODE_W + H_GAP)) / 2;
+        
+        const tag = d["Equipment Tag(To)"];
+        nodeMap[tag] = { 
+            x: startX + col * (NODE_W + H_GAP), 
+            y: cy + V_GAP + (row * (NODE_H + 40)), 
+            type: "to", 
+            tag: tag,
+            data: d 
+        };
     });
-  };
-  addEdges(fromRows);
-  addEdges(toRows);
 
-  // ── 레이어 순서: edge → label → node ────────────────
-  const edgeLayer  = g.append("g").attr("class", "edge-layer");
-  const labelLayer = g.append("g").attr("class", "label-layer");
-  const nodeLayer  = g.append("g").attr("class", "node-layer");
+    // ── SVG 요소 생성 ─────────────────────────────────────────
+    const g = svg.append("g").attr("id", "main-g");
+    
+    // 줌 기능 설정
+    const zoom = d3.zoom().on("zoom", (e) => g.attr("transform", e.transform));
+    svg.call(zoom);
 
-  // ── 엣지 + CKT 라벨 그리기 ──────────────────────────
-  edges.forEach(edge => {
-    const fn = nodeMap[edge.fromTag];
-    const tn = nodeMap[edge.toTag];
+    // 화살표 머리 정의
+    svg.append("defs").append("marker")
+        .attr("id", "arrowhead").attr("viewBox", "0 -5 10 10").attr("refX", 10).attr("refY", 0)
+        .attr("markerWidth", 6).attr("markerHeight", 6).attr("orient", "auto")
+        .append("path").attr("d", "M0,-5L10,0L0,5").attr("fill", "#546e7a");
 
-    // 화살표: 노드 하단 중심 → 꺾인 직각선 → 노드 상단 중심
-    const x1 = fn.x,  y1 = fn.y + NODE_H / 2 + 2;
-    const x2 = tn.x,  y2 = tn.y - NODE_H / 2 - 2;
+    const edgeLayer = g.append("g").attr("class", "links");
+    const nodeLayer = g.append("g").attr("class", "nodes");
+
+    // ── 선(Edge) 및 라벨 그리기 ──────────────────────────────
+    const edges = [];
+    fromTags.forEach(fTag => edges.push({ from: fTag, to: targetTag }));
+    toRows.forEach(d => edges.push({ from: targetTag, to: d["Equipment Tag(To)"], data: d }));
+
+    edges.forEach(edge => {
+        const fn = nodeMap[edge.from];
+        const tn = nodeMap[edge.to];
+        if (!fn || !tn) return;
+
+        const path = edgeLayer.append("path")
+            .attr("class", "link")
+            .attr("data-from", edge.from)
+            .attr("data-to", edge.to)
+            .attr("d", calculateOrthogonalPath(fn, tn))
+            .attr("marker-end", "url(#arrowhead)");
+
+        // CKT 라벨 추가 (초기엔 숨김)
+        const labelData = getLabelText(edge);
+        g.append("text")
+            .attr("class", `ckt-label label-${edge.from}-${edge.to}`)
+            .attr("data-from", edge.from)
+            .attr("data-to", edge.to)
+            .style("display", "none")
+            .text(labelData.text)
+            .attr("x", labelData.isFrom ? fn.x + 5 : tn.x + 5)
+            .attr("y", labelData.isFrom ? fn.y + NODE_H/2 + 15 : tn.y - NODE_H/2 - 5);
+    });
+
+    // ── 노드(장비 사각형) 그리기 ─────────────────────────────
+    Object.entries(nodeMap).forEach(([tag, node]) => {
+        const ng = nodeLayer.append("g")
+            .attr("class", `node node-${node.type}`)
+            .attr("transform", `translate(${node.x - NODE_W / 2}, ${node.y - NODE_H / 2})`)
+            .style("cursor", "move")
+            .call(d3.drag()
+                .on("start", dragStarted)
+                .on("drag", dragged)
+                .on("end", dragEnded)
+            );
+
+        ng.append("rect").attr("width", NODE_W).attr("height", NODE_H).attr("rx", 6);
+        ng.append("text")
+            .attr("x", NODE_W / 2).attr("y", NODE_H / 2 + 5)
+            .attr("text-anchor", "middle").text(tag);
+
+        // 이벤트 바인딩 (클릭/더블클릭/롱프레스)
+        setupInteractions(ng, tag);
+    });
+}
+
+// ── 2. 유틸리티 함수 및 드래그 로직 ───────────────────────────
+
+function calculateOrthogonalPath(fn, tn) {
+    const x1 = fn.x, y1 = fn.y + NODE_H / 2;
+    const x2 = tn.x, y2 = tn.y - NODE_H / 2;
     const midY = (y1 + y2) / 2;
-
-    edgeLayer.append("path")
-      .attr("class", "link")
-      .attr("d", `M${x1},${y1} V${midY} H${x2} V${y2}`)
-      .attr("marker-end", "url(#arrowhead)");
-
-    // ── CKT 라벨 계산 ───────────────────────────────
-    // From 측: -XXX 접미사가 있으면 "-XXX / CKT(From)", 없으면 "CKT(From)"
-    const xMatch  = edge.fromTag.match(/-(\d{3})$/);
-    const fromLabelText = xMatch
-      ? `-${xMatch[1]} / ${edge.cktFrom}`
-      : edge.cktFrom;
-
-    // From 라벨 위치 (화살표 출발점 근처)
-    labelLayer.append("text")
-      .attr("class", "ckt-label")
-      .attr("data-from", edge.fromTag)
-      .attr("data-to",   edge.toTag)
-      .attr("x", x1 + (x2 >= x1 ? 4 : -4))
-      .attr("y", y1 + 13)
-      .attr("text-anchor", x2 >= x1 ? "start" : "end")
-      .style("display", "none")
-      .text(fromLabelText);
-
-    // To 라벨 위치 (화살표 도착점 근처)
-    labelLayer.append("text")
-      .attr("class", "ckt-label")
-      .attr("data-from", edge.fromTag)
-      .attr("data-to",   edge.toTag)
-      .attr("x", x2 + (x2 >= x1 ? 4 : -4))
-      .attr("y", y2 - 5)
-      .attr("text-anchor", x2 >= x1 ? "start" : "end")
-      .style("display", "none")
-      .text(edge.cktTo);
-  });
-
-  // ── 노드 그리기 ─────────────────────────────────────
-  Object.entries(nodeMap).forEach(([tag, node]) => {
-    const ng = nodeLayer.append("g")
-      .attr("class", `node node-${node.type}`)
-      .attr("transform", `translate(${node.x - NODE_W / 2},${node.y - NODE_H / 2})`)
-      .style("cursor", "pointer");
-
-    // 노드 배경 사각형
-    ng.append("rect").attr("width", NODE_W).attr("height", NODE_H).attr("rx", 5);
-
-    // 장비 태그 텍스트 (긴 경우 줄임)
-    ng.append("text")
-      .attr("x", NODE_W / 2)
-      .attr("y", NODE_H / 2 + 4)
-      .attr("text-anchor", "middle")
-      .style("font-size", "11px")
-      .style("pointer-events", "none")
-      .text(trimTag(tag));
-
-    // 라벨 상태 초기화
-    labelVisible[tag] = false;
-
-    // ── 클릭 / 더블클릭 / 길게 누름 이벤트 ─────────────
-    let clicks = 0;
-    let clickTimer  = null;
-    let pressTimer  = null;
-
-    // 터치: 길게 누름 → 트리 재그리기
-    ng.on("touchstart", e => {
-      e.preventDefault();
-      pressTimer = setTimeout(() => { pressTimer = null; drawTree(tag); }, 650);
-    }).on("touchend", () => {
-      if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
-    });
-
-    // 마우스: 클릭 카운트로 단클릭 / 더블클릭 구분
-    ng.on("click", e => {
-      e.stopPropagation();
-      clicks++;
-      clearTimeout(clickTimer);
-      clickTimer = setTimeout(() => {
-        const n = clicks;
-        clicks = 0;
-        if (n >= 2) {
-          // 더블클릭 → 트리 재그리기
-          drawTree(tag);
-        } else {
-          // 단클릭 → CKT 라벨 토글
-          labelVisible[tag] = !labelVisible[tag];
-          toggleLabels(tag, labelVisible[tag]);
-        }
-      }, 260);
-    });
-  });
+    return `M${x1},${y1} V${midY} H${x2} V${y2}`;
 }
 
-// ─────────────────────────────────────────────────────
-// toggleLabels: 특정 태그에 연결된 모든 CKT 라벨 표시/숨김
-// ─────────────────────────────────────────────────────
-function toggleLabels(tag, show) {
-  const display = show ? "block" : "none";
-  d3.selectAll(".ckt-label").each(function () {
-    const el = d3.select(this);
-    if (el.attr("data-from") === tag || el.attr("data-to") === tag) {
-      el.style("display", display);
+function getLabelText(edge) {
+    const isToSide = edge.from === nodeMap[edge.to]?.tag; // 목적지 기준 판단
+    const d = edge.data || powerData.find(pd => pd["Equipment Tag(From)"] === edge.from && pd["Equipment Tag(To)"] === edge.to);
+    
+    if (!d) return { text: "", isFrom: false };
+
+    // EDB-XXX 형식 체크 (정규식)
+    const suffixMatch = String(edge.from).match(/-(\d{3})$/);
+    if (suffixMatch) {
+        return { text: `-${suffixMatch[1]} / ${d["CKT(From)"] || ""}`, isFrom: true };
     }
-  });
+    return { text: d["CKT(From)"] || d["CKT(To)"] || "", isFrom: !isToSide };
 }
 
-// ─────────────────────────────────────────────────────
-// 유틸
-// ─────────────────────────────────────────────────────
-/** 중복 제거 (빈 문자열 제외) */
-function unique(arr) {
-  return [...new Set(arr)].filter(Boolean);
+// 드래그 핸들러
+function dragStarted(event, d) { d3.select(this).raise().classed("active", true); }
+function dragged(event, d) {
+    const tag = d3.select(this).select("text").text();
+    const node = nodeMap[tag];
+    node.x = event.x + NODE_W/2; // 중심점 기준 보정
+    node.y = event.y + NODE_H/2;
+    
+    d3.select(this).attr("transform", `translate(${event.x}, ${event.y})`);
+    
+    // 연결된 모든 선 업데이트
+    d3.selectAll(".link").each(function() {
+        const l = d3.select(this);
+        const fTag = l.attr("data-from");
+        const tTag = l.attr("data-to");
+        if (fTag === tag || tTag === tag) {
+            l.attr("d", calculateOrthogonalPath(nodeMap[fTag], nodeMap[tTag]));
+            // 라벨 위치도 함께 업데이트 가능 (선택 사항)
+        }
+    });
 }
+function dragEnded(event, d) { d3.select(this).classed("active", false); }
 
-/** 노드 박스에 맞게 긴 태그 줄임 */
-function trimTag(tag) {
-  return tag.length > 18 ? tag.slice(0, 17) + "…" : tag;
+// 클릭/더블클릭/롱프레스 구분 로직
+function setupInteractions(selection, tag) {
+    let clickCount = 0;
+    let timer;
+    let pressTimer;
+
+    selection.on("mousedown", () => {
+        pressTimer = setTimeout(() => {
+            clickCount = 0;
+            drawTree(tag); // 롱프레스 -> 해당 장비로 이동
+        }, 600);
+    }).on("mouseup", () => clearTimeout(pressTimer))
+      .on("click", (e) => {
+        clickCount++;
+        if (clickCount === 1) {
+            timer = setTimeout(() => {
+                if (clickCount === 1) {
+                    // 단일 클릭 -> CKT 토글
+                    const labels = d3.selectAll(`.label-${tag}, [data-from="${tag}"], [data-to="${tag}"]`).filter(".ckt-label");
+                    const current = labels.style("display");
+                    labels.style("display", current === "none" ? "block" : "none");
+                }
+                clickCount = 0;
+            }, 250);
+        } else if (clickCount === 2) {
+            clearTimeout(timer);
+            clickCount = 0;
+            drawTree(tag); // 더블클릭 -> 해당 장비로 이동
+        }
+    });
 }
