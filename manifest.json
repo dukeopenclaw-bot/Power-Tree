@@ -1,20 +1,20 @@
 {
-  "name": "Power Tree Simulator",
+  "name": "Power Searcher PWA",
   "short_name": "PowerTree",
-  "description": "전력 계통도 시뮬레이터",
+  "description": "전기 계통 파워트리 조회 시스템",
   "start_url": "./index.html",
-  "display": "fullscreen",
-  "orientation": "landscape",
-  "background_color": "#f0f2f5",
-  "theme_color": "#2ecc40",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#2196F3",
   "icons": [
     {
-      "src": "icon-192.png",
+      "src": "https://cdn-icons-png.flaticon.com/512/10002/10002633.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     },
     {
-      "src": "icon-512.png",
+      "src": "https://cdn-icons-png.flaticon.com/512/10002/10002633.png",
       "sizes": "512x512",
       "type": "image/png"
     }
