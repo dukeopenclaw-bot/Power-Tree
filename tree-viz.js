@@ -22,9 +22,11 @@ function nodeWidth(tag) {
 }
 
 // ── EDB -XXX 패턴 추출 ───────────────────────────────────────
-// 태그에 "EDB-" 뒤 3자리 숫자가 있으면 "-XXX" 반환, 없으면 null
+// EDB를 포함하는 태그에서 맨 끝 "-XXX" (하이픈 + 정확히 3자리) 추출
+// 예: "PANEL-EDB-001" → "-001", "EDB-12345" → null (5자리라 제외)
 function getEdbSuffix(tag) {
-    const m = tag.match(/EDB[-_](\d{3})/i);
+    if (!/EDB/i.test(tag)) return null;
+    const m = tag.match(/-(\d{3})$/);
     return m ? `-${m[1]}` : null;
 }
 
