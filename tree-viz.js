@@ -10,12 +10,12 @@ const NODE_W = 160;      // 노드 너비 (글자가 안 가려지도록 확대)
 const NODE_H = 50;       // 노드 높이
 const H_GAP = 80;        // 노드 간 수평 간격 (확대)
 const V_GAP = 200;       // 레벨 간 수직 간격 (확대, 선 공간 확보)
-const ITEMS_PER_ROW = 3; // To 장비 한 행당 최대 개수 (축소, 겹침 방지 최적)
+const ITEMS_PER_ROW = 2; // To 장비 한 행당 최대 개수 (짝수 열 → 가운데 선 겹침 방지)
 
 let nodeMap = {};        // 현재 화면의 노드 좌표 저장
 let labelVisible = {};   // CKT 라벨 표시 상태
 let tgt = "";            // 현재 선택된 장비 태그
-let edgeStyle = "step";  // 선 스타일: "step" | "bezier"
+const edgeStyle = "bezier"; // 곡선 고정
 
 // ── 1. 메인 그리기 함수 ───────────────────────────────────────
 function drawTree(targetTag) {
@@ -181,45 +181,14 @@ function drawTree(targetTag) {
 
 // ── 2. 유틸리티 함수 및 드래그 로직 ───────────────────────────
 
-/** 현재 edgeStyle에 따라 경로 함수 선택 */
-function getEdgePath(fn, tn) {
-    return edgeStyle === "bezier"
-        ? calculateBezierPath(fn, tn)
-        : calculateOrthogonalPath(fn, tn);
-}
-
 /** 베지어 곡선 경로: 노드 하단 → 노드 상단을 S자 곡선으로 연결 */
-function calculateBezierPath(fn, tn) {
+function getEdgePath(fn, tn) {
     const x1 = fn.x;
     const y1 = fn.y + NODE_H / 2 + 2;
     const x2 = tn.x;
     const y2 = tn.y - NODE_H / 2 - 8;
     const dy = Math.abs(y2 - y1) * 0.5;
     return `M${x1},${y1} C${x1},${y1 + dy} ${x2},${y2 - dy} ${x2},${y2}`;
-}
-
-/** 직각(Step) 경로: 수직 → 수평 → 수직 꺾임 */
-function calculateOrthogonalPath(fn, tn) {
-    const x1 = fn.x;
-    const y1 = fn.y + NODE_H / 2 + 2;
-    const x2 = tn.x;
-    const y2 = tn.y - NODE_H / 2 - 8;
-    const baseOffset = 40;
-    const spread = 20;
-    const adaptiveMidY = y1 + baseOffset + Math.sin((x1 - x2) * 0.01) * spread;
-    return `M${x1},${y1} V${adaptiveMidY} H${x2} V${y2}`;
-}
-
-/** 선 스타일 토글 (버튼에서 호출) */
-function toggleEdgeStyle() {
-    edgeStyle = edgeStyle === "step" ? "bezier" : "step";
-    d3.selectAll(".link").attr("d", function () {
-        const fTag = d3.select(this).attr("data-from");
-        const tTag = d3.select(this).attr("data-to");
-        return getEdgePath(nodeMap[fTag], nodeMap[tTag]);
-    });
-    const btn = document.getElementById("edge-style-btn");
-    if (btn) btn.textContent = edgeStyle === "bezier" ? "직각" : "곡선";
 }
 
 // 드래그 핸들러
