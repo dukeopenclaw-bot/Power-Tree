@@ -6,11 +6,10 @@
  */
 
 // ── 레이아웃 및 환경 설정 ─────────────────────────────────────
-const NODE_W = 160;      // 노드 너비 (글자가 안 가려지도록 확대)
-const NODE_H = 50;       // 노드 높이
-const H_GAP = 80;        // 노드 간 수평 간격 (확대)
-const V_GAP = 200;       // 레벨 간 수직 간격 (확대, 선 공간 확보)
-const ITEMS_PER_ROW = 2; // To 장비 한 행당 최대 개수 (짝수 열 → 가운데 선 겹침 방지)
+const NODE_W = 120;      // 노드 너비
+const NODE_H = 36;       // 노드 높이 (폰트 10px 기준 축소)
+const H_GAP = 20;        // 노드 간 수평 간격
+const V_GAP = 160;       // 레벨 간 수직 간격
 
 let nodeMap = {};        // 현재 화면의 노드 좌표 저장
 let labelVisible = {};   // CKT 라벨 표시 상태
@@ -61,17 +60,22 @@ function drawTree(targetTag) {
         nodeMap[tag] = { x: x, y: cy - V_GAP, type: "from", tag: tag };
     });
 
-    // 3. To 노드 (아래쪽, 다단 배치 및 간격 확대)
+    // 3. To 노드 (아래쪽) - 짝수 열 자동 확장 (2→4→6...)
+    // 노드 수에 맞게 한 행에 들어갈 최대 짝수 열 수 결정
+    const itemsPerRow = toTags.length <= 2 ? 2
+                      : toTags.length % 2 === 0 ? toTags.length
+                      : toTags.length + 1; // 홀수면 올림하여 짝수로
+
     toTags.forEach((tag, i) => {
-        const row = Math.floor(i / ITEMS_PER_ROW);
-        const col = i % ITEMS_PER_ROW;
-        const rowCount = Math.min(toTags.length - row * ITEMS_PER_ROW, ITEMS_PER_ROW);
+        const row = Math.floor(i / itemsPerRow);
+        const col = i % itemsPerRow;
+        const rowCount = Math.min(toTags.length - row * itemsPerRow, itemsPerRow);
         const startX = cx - ((rowCount - 1) * (NODE_W + H_GAP)) / 2;
-        
-        nodeMap[tag] = { 
-            x: startX + col * (NODE_W + H_GAP), 
-            y: cy + V_GAP + (row * (NODE_H + V_GAP/2)), // 수직 간격도 가변
-            type: "to", 
+
+        nodeMap[tag] = {
+            x: startX + col * (NODE_W + H_GAP),
+            y: cy + V_GAP + row * (NODE_H + V_GAP * 0.6),
+            type: "to",
             tag: tag
         };
     });

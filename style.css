@@ -307,10 +307,10 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
   fill: var(--node-to);
   stroke: var(--node-stroke-to);
 }
-.node text { 
-  fill: #000; /* 글자색 검은색 */
-  font-family: sans-serif; 
-  font-size: 12px;
+.node text {
+  fill: #000;
+  font-family: sans-serif;
+  font-size: 10px;
   font-weight: 500;
 }
 .node.node-center text { font-weight: 700; }
