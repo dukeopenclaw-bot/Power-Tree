@@ -133,6 +133,21 @@
         );
     } catch (e) { /* BBox 실패 무시 */ }
   }
+
+  // ── 창 크기 변경 시 트리 재렌더 ──────────────────────
+  (function () {
+    let resizeTimer = null;
+    const container = document.getElementById("canvas-container");
+    const observer = new ResizeObserver(() => {
+      if (!resizeTimer) {
+        resizeTimer = setTimeout(() => {
+          resizeTimer = null;
+          if (typeof tgt !== "undefined" && tgt) drawTree(tgt);
+        }, 200);
+      }
+    });
+    observer.observe(container);
+  })();
 </script>
 
 </body>

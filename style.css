@@ -195,15 +195,16 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 */
 /* 캔버스 배경 격자무늬 (라이트모드용 연한 격자) */
 #canvas-container {
-  flex: 1;
+  flex: 1 1 0;       /* 남은 공간 전부 차지 */
+  min-width: 0;      /* flex 아이템 기본 min-width:auto 방지 */
+  width: 0;          /* flex-grow가 실제로 동작하도록 */
+  height: 100%;      /* 부모 높이 전체 */
   position: relative;
   overflow: hidden;
   background-color: var(--bg);
   background-image: radial-gradient(#d1d1d1 1px, transparent 1px);
   background-size: 30px 30px;
 }
-
-
 
 
 
