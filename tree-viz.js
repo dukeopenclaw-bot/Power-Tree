@@ -6,10 +6,10 @@
  */
 
 // ── 레이아웃 및 환경 설정 ─────────────────────────────────────
-const NODE_W = 120;      // 노드 너비
-const NODE_H = 36;       // 노드 높이 (폰트 10px 기준 축소)
-const H_GAP = 20;        // 노드 간 수평 간격
-const V_GAP = 160;       // 레벨 간 수직 간격
+const NODE_W = 130;      // 노드 너비 (엑셀 10pt 기준 태그 텍스트 여유있게)
+const NODE_H = 34;       // 노드 높이 (13px 폰트 + 상하 여백)
+const H_GAP = 24;        // 노드 간 수평 간격 (고정)
+const V_GAP = 120;       // 레벨 간 수직 간격 (고정)
 
 let nodeMap = {};        // 현재 화면의 노드 좌표 저장
 let labelVisible = {};   // CKT 라벨 표시 상태
@@ -163,22 +163,16 @@ function drawTree(targetTag) {
         setupInteractions(ng, tag);
     });
     
-    // 트리 전체를 캔버스 정 가운데에 맞춤
+    // 1:1 스케일 유지, 트리 전체를 캔버스 정 가운데에 위치
     requestAnimationFrame(() => {
         try {
             const bbox = g.node().getBBox();
             if (!bbox.width || !bbox.height) return;
 
-            const pad = 40;
-            const scale = Math.min(
-                (containerW - pad * 2) / bbox.width,
-                (containerH - pad * 2) / bbox.height,
-                1.2
-            );
-            const tx = containerW / 2 - scale * (bbox.x + bbox.width  / 2);
-            const ty = containerH / 2 - scale * (bbox.y + bbox.height / 2);
+            const tx = containerW / 2 - (bbox.x + bbox.width  / 2);
+            const ty = containerH / 2 - (bbox.y + bbox.height / 2);
 
-            svg.call(zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(scale));
+            svg.call(zoom.transform, d3.zoomIdentity.translate(tx, ty));
         } catch (e) { /* BBox 실패 무시 */ }
     });
 }

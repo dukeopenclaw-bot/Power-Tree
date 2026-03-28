@@ -310,7 +310,7 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 .node text {
   fill: #000;
   font-family: sans-serif;
-  font-size: 10px;
+  font-size: 13px; /* 엑셀 10pt = 13.3px */
   font-weight: 500;
 }
 .node.node-center text { font-weight: 700; }
