@@ -15,6 +15,7 @@ let nodeMap = {};        // 현재 화면의 노드 좌표 저장
 let labelVisible = {};   // CKT 라벨 표시 상태
 let tgt = "";            // 현재 선택된 장비 태그
 const edgeStyle = "bezier"; // 곡선 고정
+let colCount = 4;        // 하단 열 수 (짝수, 기본 4)
 
 // ── 1. 메인 그리기 함수 ───────────────────────────────────────
 function drawTree(targetTag) {
@@ -60,16 +61,11 @@ function drawTree(targetTag) {
         nodeMap[tag] = { x: x, y: cy - V_GAP, type: "from", tag: tag };
     });
 
-    // 3. To 노드 (아래쪽) - 짝수 열 자동 확장 (2→4→6...)
-    // 노드 수에 맞게 한 행에 들어갈 최대 짝수 열 수 결정
-    const itemsPerRow = toTags.length <= 2 ? 2
-                      : toTags.length % 2 === 0 ? toTags.length
-                      : toTags.length + 1; // 홀수면 올림하여 짝수로
-
+    // 3. To 노드 (아래쪽) - colCount 열 기준으로 배치
     toTags.forEach((tag, i) => {
-        const row = Math.floor(i / itemsPerRow);
-        const col = i % itemsPerRow;
-        const rowCount = Math.min(toTags.length - row * itemsPerRow, itemsPerRow);
+        const row = Math.floor(i / colCount);
+        const col = i % colCount;
+        const rowCount = Math.min(toTags.length - row * colCount, colCount);
         const startX = cx - ((rowCount - 1) * (NODE_W + H_GAP)) / 2;
 
         nodeMap[tag] = {
@@ -214,4 +210,13 @@ function dragEnded(event, d) { d3.select(this).classed("active", false); }
 // 클릭/더블클릭/롱프레스 구분 로직 (이전 코드와 동일)
 function setupInteractions(selection, tag) {
     // ... (이전 코드의 setupInteractions 로직을 여기에 추가) ...
+}
+
+// ── 열 수 조절 (짝수만, 최소 2) ─────────────────────────────
+function changeColCount(delta) {
+    const next = colCount + delta;
+    if (next < 2) return;
+    colCount = next;
+    document.getElementById("col-count").textContent = colCount;
+    if (tgt) drawTree(tgt);
 }

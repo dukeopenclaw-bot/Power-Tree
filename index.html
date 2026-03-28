@@ -24,7 +24,7 @@
   <aside id="sidebar">
     <div class="sidebar-header">
       <h1>Power Tree</h1>
-      <span class="version">V0.6</span>
+      <span class="version">V0.7</span>
     </div>
 
     <div class="search-box">
@@ -63,6 +63,14 @@
       <div class="leg-row"><div class="leg-box leg-from"></div> 공급원 (From)</div>
       <div class="leg-row"><div class="leg-box leg-center"></div> 선택 장비</div>
       <div class="leg-row"><div class="leg-box leg-to"></div> 부하 (To)</div>
+    </div>
+
+    <!-- 열 수 조절 -->
+    <div id="col-ctrl">
+      <span class="col-label">열</span>
+      <button title="열 줄이기" onclick="changeColCount(-2)">▼</button>
+      <span id="col-count">4</span>
+      <button title="열 늘리기" onclick="changeColCount(2)">▲</button>
     </div>
 
     <!-- 줌 툴바 -->
