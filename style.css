@@ -377,11 +377,13 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 /* ─── CKT Label Styles ─── */
 .ckt-label {
   font-size: 11px;
-  fill: var(--label); /* 빨간색 라벨 */
+  fill: var(--label);
   font-family: sans-serif;
   font-weight: 600;
   pointer-events: none;
-  background: rgba(255,255,255,0.7); /* 라벨 배경 살짝 */
+}
+.edb-suffix {
+  fill: #0056b3; /* EDB 번호는 파란색으로 구분 */
 }
 
 /* ─── Legend ─── */
