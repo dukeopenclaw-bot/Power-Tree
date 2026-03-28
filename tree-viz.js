@@ -85,7 +85,7 @@ function drawTree(targetTag) {
 
     // 화살표 머리 정의
     svg.append("defs").append("marker")
-        .attr("id", "arrowhead").attr("viewBox", "0 -5 10 10").attr("refX", NODE_H/2 + 5).attr("refY", 0)
+        .attr("id", "arrowhead").attr("viewBox", "0 -5 10 10").attr("refX", 10).attr("refY", 0)
         .attr("markerWidth", 6).attr("markerHeight", 6).attr("orient", "auto")
         .append("path").attr("d", "M0,-5L10,0L0,5").attr("fill", "#546e7a");
 
@@ -171,13 +171,11 @@ function calculateOrthogonalPath(fn, tn, type) {
     const y2 = tn.y - NODE_H / 2; // To 노드 상단 중심
     
     // ── 겹침 방지 핵심 로직 ────────────────────────────────
-    const midY = (y1 + y2) / 2;
-    
-    // 노드의 X 위치(x2)에 따라 꺾이는 수평선의 높이(midY)를 다르게 줍니다.
-    // 이렇게 하면 수평선들이 서로 위아래로 빗겨나가게 됩니다.
-    const spread = V_GAP * 0.2; // 분산 범위
-    // Math.sin(x2)를 사용하여 X 좌표에 따라 고유한 오프셋 생성
-    const adaptiveMidY = midY + (Math.sin(x2 * 0.01) * spread); 
+    // 수평 꺾임 위치: from 노드 하단 바로 아래 고정 간격에서 시작
+    // (x1-x2) 기반으로 각 경로마다 고유한 Y 오프셋을 부여해 선 겹침 방지
+    const baseOffset = 40; // from 노드 하단에서 수평선까지 기본 간격 (px)
+    const spread = 20;     // 선 겹침 방지용 분산 범위 (px)
+    const adaptiveMidY = y1 + baseOffset + Math.sin((x1 - x2) * 0.01) * spread;
 
     // 경로 생성: 수직(V) -> 수평(H) -> 수직(V)
     return `M${x1},${y1} V${adaptiveMidY} H${x2} V${y2}`;
