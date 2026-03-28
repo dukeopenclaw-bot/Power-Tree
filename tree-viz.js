@@ -341,14 +341,26 @@ function _dragEnd(event) {
 
 // ── 7. 라벨 토글 ─────────────────────────────────────────────
 function toggleNodeLabels(tag) {
-    const groups = d3.selectAll(".edge-labels").filter(function () {
-        return d3.select(this).attr("data-from") === tag ||
-               d3.select(this).attr("data-to")   === tag;
+    // 이 장치와 연결된 윗단(toTag===tag) / 아랫단(fromTag===tag) 그룹 분리
+    const upGroups   = d3.selectAll(".edge-labels").filter(function () {
+        return d3.select(this).attr("data-to") === tag;
     });
-    const anyVisible = groups.filter(function () {
+    const downGroups = d3.selectAll(".edge-labels").filter(function () {
+        return d3.select(this).attr("data-from") === tag;
+    });
+
+    // 윗단이 화면에 있으면 윗단만, 없으면 아랫단 사용
+    const target = upGroups.size() > 0 ? upGroups : downGroups;
+
+    const anyVisible = target.filter(function () {
         return d3.select(this).style("display") !== "none";
     }).size() > 0;
-    groups.style("display", anyVisible ? "none" : null);
+
+    // 토글: 현재 표시 중이면 숨기고, 아니면 열기
+    // (반대쪽은 항상 숨김 유지)
+    downGroups.style("display", "none");
+    upGroups.style("display", "none");
+    if (!anyVisible) target.style("display", null);
 }
 
 // ── 8. 인터랙션 설정 ─────────────────────────────────────────
