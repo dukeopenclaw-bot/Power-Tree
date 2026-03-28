@@ -209,23 +209,27 @@ function renderTree(preservedTransform) {
 
         if (edge.cktFrom) {
             lg.append("text").attr("class", "ckt-label")
+                .attr("data-role", "ckt-from")
                 .attr("x", x1 - 6).attr("y", y1 + 14)
                 .attr("text-anchor", "end").text(edge.cktFrom);
         }
         const edbFrom = getEdbSuffix(edge.fromTag);
         if (edbFrom) {
             lg.append("text").attr("class", "ckt-label edb-suffix")
+                .attr("data-role", "edb-from")
                 .attr("x", x1 + 6).attr("y", y1 + 14)
                 .attr("text-anchor", "start").text(edbFrom);
         }
         const edbTo = getEdbSuffix(edge.toTag);
         if (edbTo) {
             lg.append("text").attr("class", "ckt-label edb-suffix")
+                .attr("data-role", "edb-to")
                 .attr("x", x2 + 6).attr("y", y2 - 6)
                 .attr("text-anchor", "start").text(edbTo);
         }
         if (edge.cktTo) {
             lg.append("text").attr("class", "ckt-label")
+                .attr("data-role", "ckt-to")
                 .attr("x", x2 - 6).attr("y", y2 - 6)
                 .attr("text-anchor", "end").text(edge.cktTo);
         }
@@ -297,6 +301,7 @@ function _drag(event) {
     node.x = event.x + node.w / 2;
     node.y = event.y + NODE_H / 2;
     d3.select(this).attr("transform", `translate(${event.x}, ${event.y})`);
+
     d3.selectAll(".link").each(function () {
         const l    = d3.select(this);
         const fTag = l.attr("data-from");
@@ -304,6 +309,28 @@ function _drag(event) {
         if (fTag === tag || tTag === tag) {
             l.attr("d", _bezier(nodeMap[fTag], nodeMap[tTag]));
         }
+    });
+
+    // 라벨 위치도 노드 따라 이동
+    d3.selectAll(".edge-labels").each(function () {
+        const lg   = d3.select(this);
+        const fTag = lg.attr("data-from");
+        const tTag = lg.attr("data-to");
+        if (fTag !== tag && tTag !== tag) return;
+
+        const fn = nodeMap[fTag], tn = nodeMap[tTag];
+        if (!fn || !tn) return;
+        const x1 = fn.x, y1 = fn.y + NODE_H / 2 + 2;
+        const x2 = tn.x, y2 = tn.y - NODE_H / 2 - 8;
+
+        lg.selectAll("text").each(function () {
+            const t    = d3.select(this);
+            const role = t.attr("data-role");
+            if (role === "ckt-from") { t.attr("x", x1 - 6).attr("y", y1 + 14); }
+            if (role === "edb-from") { t.attr("x", x1 + 6).attr("y", y1 + 14); }
+            if (role === "edb-to")   { t.attr("x", x2 + 6).attr("y", y2 - 6);  }
+            if (role === "ckt-to")   { t.attr("x", x2 - 6).attr("y", y2 - 6);  }
+        });
     });
 }
 function _dragEnd(event) {
