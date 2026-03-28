@@ -158,8 +158,24 @@ function drawTree(targetTag) {
         setupInteractions(ng, tag);
     });
     
-    // 초기 줌 맞춤 (노드가 containerW/2, containerH/2 기준으로 배치되므로 identity로 표시)
-    svg.call(zoom.transform, d3.zoomIdentity);
+    // 트리 전체를 캔버스 정 가운데에 맞춤
+    requestAnimationFrame(() => {
+        try {
+            const bbox = g.node().getBBox();
+            if (!bbox.width || !bbox.height) return;
+
+            const pad = 40;
+            const scale = Math.min(
+                (containerW - pad * 2) / bbox.width,
+                (containerH - pad * 2) / bbox.height,
+                1.2
+            );
+            const tx = containerW / 2 - scale * (bbox.x + bbox.width  / 2);
+            const ty = containerH / 2 - scale * (bbox.y + bbox.height / 2);
+
+            svg.call(zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(scale));
+        } catch (e) { /* BBox 실패 무시 */ }
+    });
 }
 
 // ── 2. 유틸리티 함수 및 드래그 로직 ───────────────────────────
