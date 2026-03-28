@@ -29,7 +29,7 @@
     <div class="sidebar-inner">
       <div class="sidebar-header">
         <h1>Power Tree</h1>
-        <span class="version">V1.4</span>
+        <span class="version">V1.5</span>
       </div>
 
       <div class="search-box">
@@ -104,49 +104,35 @@
       .catch(err => console.warn('SW 등록 실패:', err));
   }
 
-  // ── 툴바 줌 제어 ─────────────────────────────────
-  function getSvgZoom() {
-    return d3.zoom().on("zoom", e => {
-      d3.select("#main-g").attr("transform", e.transform);
-    });
-  }
-
+  // ── 툴바 줌 제어 (svgZoom은 tree-viz.js 전역 변수) ──────────
   function zoomIn() {
+    if (!svgZoom) return;
     d3.select("#tree-svg").transition().duration(250)
-      .call(d3.zoom().scaleBy, 1.4);
+      .call(svgZoom.scaleBy, 1.4);
   }
 
   function zoomOut() {
+    if (!svgZoom) return;
     d3.select("#tree-svg").transition().duration(250)
-      .call(d3.zoom().scaleBy, 0.7);
+      .call(svgZoom.scaleBy, 0.7);
   }
 
   function zoomFit() {
-    const svg = d3.select("#tree-svg");
-    const g   = svg.select("#main-g");
+    if (!svgZoom) return;
+    const svg  = d3.select("#tree-svg");
+    const g    = svg.select("#main-g");
     if (g.empty()) return;
-
-    const svgEl  = document.getElementById("tree-svg");
+    const svgEl = document.getElementById("tree-svg");
     const W = svgEl.clientWidth, H = svgEl.clientHeight;
-
     try {
       const bbox = g.node().getBBox();
       if (!bbox.width || !bbox.height) return;
-
-      const scale = Math.min(
-        0.9 * W / bbox.width,
-        0.9 * H / bbox.height,
-        1.5  // 최대 1.5배로 제한
-      );
+      const scale = Math.min(0.9 * W / bbox.width, 0.9 * H / bbox.height, 1.5);
       const tx = W / 2 - scale * (bbox.x + bbox.width  / 2);
       const ty = H / 2 - scale * (bbox.y + bbox.height / 2);
-
       svg.transition().duration(400)
-        .call(
-          d3.zoom().transform,
-          d3.zoomIdentity.translate(tx, ty).scale(scale)
-        );
-    } catch (e) { /* BBox 실패 무시 */ }
+        .call(svgZoom.transform, d3.zoomIdentity.translate(tx, ty).scale(scale));
+    } catch (e) { /* 무시 */ }
   }
 
   // ── 창 크기 변경 시 트리 재렌더 ──────────────────────
