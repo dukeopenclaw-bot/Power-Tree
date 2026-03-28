@@ -90,14 +90,43 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 /* ─── Sidebar ─── */
 #sidebar {
   width: 280px;
-  min-width: 240px;
-  max-width: 360px;
+  min-width: 280px;
   display: flex;
   flex-direction: column;
   background: var(--sidebar-bg);
   border-right: 1px solid var(--sidebar-border);
   z-index: 10;
   box-shadow: 2px 0 5px rgba(0,0,0,0.05);
+  transition: width 0.25s ease, min-width 0.25s ease;
+  overflow: hidden;
+}
+#sidebar.collapsed {
+  width: 44px;
+  min-width: 44px;
+}
+#sidebar.collapsed .sidebar-inner { display: none; }
+
+#sidebar-toggle {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--sidebar-border);
+  font-size: 18px;
+  cursor: pointer;
+  color: var(--text-dim);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+#sidebar-toggle:hover { background: var(--hover); color: var(--accent); }
+
+.sidebar-inner {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
 }
 
 .sidebar-header {

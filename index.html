@@ -22,24 +22,30 @@
 
   <!-- ── 좌측 사이드바 ── -->
   <aside id="sidebar">
-    <div class="sidebar-header">
-      <h1>Power Tree</h1>
-      <span class="version">V1.3</span>
+    <!-- 항상 표시되는 토글 버튼 -->
+    <button id="sidebar-toggle" onclick="toggleSidebar()" title="검색창 열기/닫기">☰</button>
+
+    <!-- 축소 시 숨겨지는 영역 -->
+    <div class="sidebar-inner">
+      <div class="sidebar-header">
+        <h1>Power Tree</h1>
+        <span class="version">V1.4</span>
+      </div>
+
+      <div class="search-box">
+        <input
+          type="text"
+          id="searchInput"
+          placeholder="장비 Tag 검색 (예: MCC, EDB...)"
+          autocomplete="off"
+          spellcheck="false"
+        />
+      </div>
+
+      <ul id="resultList"></ul>
+
+      <div id="status"></div>
     </div>
-
-    <div class="search-box">
-      <input
-        type="text"
-        id="searchInput"
-        placeholder="장비 Tag 검색 (예: MCC, EDB...)"
-        autocomplete="off"
-        spellcheck="false"
-      />
-    </div>
-
-    <ul id="resultList"></ul>
-
-    <div id="status"></div>
   </aside>
 
   <!-- ── 우측 캔버스 ── -->

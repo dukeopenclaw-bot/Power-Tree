@@ -12,40 +12,41 @@ const CHAR_W  = 7.8;
 const PAD_X   = 18;
 
 // ── 전역 상태 ─────────────────────────────────────────────────
-let nodeMap   = {};   // tag → { x, y, type, w, expanded }
-let edgeList  = [];   // 표시할 모든 엣지
-let tgt       = "";   // 최초 선택 태그
-let colCount  = 4;    // 하단 열 수 (짝수)
-let svgZoom   = null; // d3 zoom 인스턴스
-let _dragging = false; // 드래그 중 클릭 방지 플래그
+let nodeMap   = {};
+let edgeList  = [];
+let tgt       = "";   // 베이스 태그 (EDB-001 → EDB)
+let colCount  = 4;
+let svgZoom   = null;
+let _dragging = false;
 
 // ── 유틸 ─────────────────────────────────────────────────────
 function nodeWidth(tag) {
     return Math.max(70, Math.ceil(tag.length * CHAR_W) + PAD_X * 2);
 }
 
-// 화면 표시용: EDB 포함 태그 끝 -XXX(3자리) 제거
-function displayName(tag) {
+// EDB-XXX → 베이스 태그 (EDB). 그 외는 그대로.
+function getBaseName(tag) {
+    if (!tag) return tag;
     return /EDB/i.test(tag) ? tag.replace(/-\d{3}$/, "") : tag;
 }
 
-// EDB 태그 끝 -XXX 추출 (라벨 표시용)
+// EDB 끝 -XXX 추출 (엣지 라벨용)
 function getEdbSuffix(tag) {
     if (!/EDB/i.test(tag)) return null;
     const m = tag.match(/-(\d{3})$/);
     return m ? `-${m[1]}` : null;
 }
 
-// ── 1. 트리 초기화 (새 장비 선택 시) ──────────────────────────
+// ── 1. 트리 초기화 ────────────────────────────────────────────
 function drawTree(targetTag) {
     nodeMap  = {};
     edgeList = [];
-    tgt      = targetTag;
+    tgt      = getBaseName(targetTag); // 베이스 태그로 정규화
 
     const hintDiv = document.getElementById("hint");
     if (hintDiv) hintDiv.classList.add("hidden");
 
-    if (!tgt && powerData.length > 0) tgt = powerData[0]["Equipment Tag(From)"];
+    if (!tgt && powerData.length > 0) tgt = getBaseName(powerData[0]["Equipment Tag(From)"]);
     if (!tgt) return;
 
     const container  = document.getElementById("canvas-container");
@@ -54,28 +55,29 @@ function drawTree(targetTag) {
     const cx = containerW / 2;
     const cy = containerH / 2;
 
-    const fromRows = powerData.filter(d => d["Equipment Tag(To)"]   === tgt);
-    const toRows   = powerData.filter(d => d["Equipment Tag(From)"] === tgt);
-    const fromTags = [...new Set(fromRows.map(d => d["Equipment Tag(From)"]))].filter(Boolean);
-    const toTags   = [...new Set(toRows.map(d =>   d["Equipment Tag(To)"]))].filter(Boolean);
+    // 베이스 태그 기준으로 데이터 필터 (EDB-001, EDB-002 모두 "EDB"로 매칭)
+    const fromRows = powerData.filter(d => getBaseName(d["Equipment Tag(To)"])   === tgt);
+    const toRows   = powerData.filter(d => getBaseName(d["Equipment Tag(From)"]) === tgt);
+
+    // 베이스 태그 기준으로 중복 제거
+    const fromTags = [...new Set(fromRows.map(d => getBaseName(d["Equipment Tag(From)"])))]
+        .filter(t => t && t !== tgt);
+    const toTags   = [...new Set(toRows.map(d =>   getBaseName(d["Equipment Tag(To)"])))]
+        .filter(t => t && t !== tgt);
 
     const allTags = [tgt, ...fromTags, ...toTags];
     const STEP = Math.max(...allTags.map(nodeWidth)) + H_GAP;
 
-    // 중앙 노드
     nodeMap[tgt] = { x: cx, y: cy, type: "center", w: nodeWidth(tgt), expanded: true };
 
-    // From 노드 (위)
     fromTags.forEach((tag, i) => {
         const total = fromTags.length;
         nodeMap[tag] = {
             x: cx + (i - (total - 1) / 2) * STEP,
-            y: cy - V_GAP,
-            type: "from", w: nodeWidth(tag), expanded: false
+            y: cy - V_GAP, type: "from", w: nodeWidth(tag), expanded: false
         };
     });
 
-    // To 노드 (아래)
     toTags.forEach((tag, i) => {
         const row      = Math.floor(i / colCount);
         const col      = i % colCount;
@@ -88,38 +90,35 @@ function drawTree(targetTag) {
         };
     });
 
-    // 엣지 수집
     _collectEdges([...fromRows, ...toRows], tgt);
-
-    renderTree(null); // 새로 그릴 때는 중앙 정렬
+    renderTree(null);
 }
 
-// ── 2. 노드 확장 (더블클릭 / 길게 클릭) ───────────────────────
+// ── 2. 노드 확장 ──────────────────────────────────────────────
 function expandNode(tag) {
     const node = nodeMap[tag];
     if (!node || node.expanded) return;
     node.expanded = true;
 
-    const fromRows = powerData.filter(d => d["Equipment Tag(To)"]   === tag);
-    const toRows   = powerData.filter(d => d["Equipment Tag(From)"] === tag);
-    const newFromTags = [...new Set(fromRows.map(d => d["Equipment Tag(From)"]))].filter(t => t && !nodeMap[t]);
-    const newToTags   = [...new Set(toRows.map(d =>   d["Equipment Tag(To)"]))].filter(t => t && !nodeMap[t]);
+    const fromRows = powerData.filter(d => getBaseName(d["Equipment Tag(To)"])   === tag);
+    const toRows   = powerData.filter(d => getBaseName(d["Equipment Tag(From)"]) === tag);
 
-    // 현재 노드 기준 STEP 계산 (전체 태그 고려)
+    const newFromTags = [...new Set(fromRows.map(d => getBaseName(d["Equipment Tag(From)"])))]
+        .filter(t => t && t !== tag && !nodeMap[t]);
+    const newToTags   = [...new Set(toRows.map(d => getBaseName(d["Equipment Tag(To)"])))]
+        .filter(t => t && t !== tag && !nodeMap[t]);
+
     const allTags = [...Object.keys(nodeMap), ...newFromTags, ...newToTags];
     const STEP = Math.max(...allTags.map(nodeWidth)) + H_GAP;
 
-    // 새 From 노드: 클릭 노드 위에 배치
     newFromTags.forEach((t, i) => {
         const total = newFromTags.length;
         nodeMap[t] = {
             x: node.x + (i - (total - 1) / 2) * STEP,
-            y: node.y - V_GAP,
-            type: "from", w: nodeWidth(t), expanded: false
+            y: node.y - V_GAP, type: "from", w: nodeWidth(t), expanded: false
         };
     });
 
-    // 새 To 노드: 클릭 노드 아래에 배치 (colCount 열)
     newToTags.forEach((t, i) => {
         const row      = Math.floor(i / colCount);
         const col      = i % colCount;
@@ -132,27 +131,36 @@ function expandNode(tag) {
         };
     });
 
-    // 새 엣지 수집
     _collectEdges([...fromRows, ...toRows], tag);
 
-    // 현재 줌 상태 유지하며 재렌더
     const svg     = d3.select("#tree-svg");
     const current = svgZoom ? d3.zoomTransform(svg.node()) : null;
     renderTree(current);
 }
 
-// ── 3. 엣지 수집 헬퍼 ────────────────────────────────────────
-function _collectEdges(rows, anchorTag) {
+// ── 3. 엣지 수집 ──────────────────────────────────────────────
+function _collectEdges(rows, anchorBase) {
     rows.forEach(row => {
-        const ft = row["Equipment Tag(From)"];
-        const tt = row["Equipment Tag(To)"];
+        const ft     = row["Equipment Tag(From)"];
+        const tt     = row["Equipment Tag(To)"];
         if (!ft || !tt) return;
-        if (!nodeMap[ft] || !nodeMap[tt]) return;
-        if (ft !== anchorTag && tt !== anchorTag) return;
+        const baseFt = getBaseName(ft);
+        const baseTt = getBaseName(tt);
+        if (!nodeMap[baseFt] || !nodeMap[baseTt]) return;
+        if (baseFt !== anchorBase && baseTt !== anchorBase) return;
+
+        // 원본 태그 기준으로 키 생성 (같은 EDB의 회로별 엣지 구분)
         const key = `${ft}→${tt}`;
         if (!edgeList.find(e => e.key === key)) {
-            edgeList.push({ key, fromTag: ft, toTag: tt,
-                cktFrom: row["CKT(From)"], cktTo: row["CKT(To)"] });
+            edgeList.push({
+                key,
+                fromTag:     baseFt,
+                toTag:       baseTt,
+                cktFrom:     row["CKT(From)"],
+                cktTo:       row["CKT(To)"],
+                suffixFrom:  getEdbSuffix(ft),  // -XXX (from 원본)
+                suffixTo:    getEdbSuffix(tt)    // -XXX (to 원본)
+            });
         }
     });
 }
@@ -173,7 +181,6 @@ function renderTree(preservedTransform) {
         .on("zoom", e => g.attr("transform", e.transform));
     svg.call(svgZoom);
 
-    // 화살표 마커
     svg.append("defs").append("marker")
         .attr("id", "arrowhead")
         .attr("viewBox", "0 -5 10 10").attr("refX", 10).attr("refY", 0)
@@ -184,7 +191,6 @@ function renderTree(preservedTransform) {
     const labelLayer = g.append("g").attr("class", "labels");
     const nodeLayer  = g.append("g").attr("class", "nodes");
 
-    // 엣지 + 라벨 (라벨은 기본 숨김, 노드 클릭 시 표시)
     edgeList.forEach(edge => {
         const fn = nodeMap[edge.fromTag];
         const tn = nodeMap[edge.toTag];
@@ -200,7 +206,6 @@ function renderTree(preservedTransform) {
         const x1 = fn.x, y1 = fn.y + NODE_H / 2 + 2;
         const x2 = tn.x, y2 = tn.y - NODE_H / 2 - 8;
 
-        // 라벨 그룹: 기본 숨김, data-from/data-to 로 식별
         const lg = labelLayer.append("g")
             .attr("class", "edge-labels")
             .attr("data-from", edge.fromTag)
@@ -213,19 +218,18 @@ function renderTree(preservedTransform) {
                 .attr("x", x1 - 6).attr("y", y1 + 14)
                 .attr("text-anchor", "end").text(edge.cktFrom);
         }
-        const edbFrom = getEdbSuffix(edge.fromTag);
-        if (edbFrom) {
+        // -XXX는 원본 태그에서 추출한 suffixFrom/suffixTo 사용
+        if (edge.suffixFrom) {
             lg.append("text").attr("class", "ckt-label edb-suffix")
                 .attr("data-role", "edb-from")
                 .attr("x", x1 + 6).attr("y", y1 + 14)
-                .attr("text-anchor", "start").text(edbFrom);
+                .attr("text-anchor", "start").text(edge.suffixFrom);
         }
-        const edbTo = getEdbSuffix(edge.toTag);
-        if (edbTo) {
+        if (edge.suffixTo) {
             lg.append("text").attr("class", "ckt-label edb-suffix")
                 .attr("data-role", "edb-to")
                 .attr("x", x2 + 6).attr("y", y2 - 6)
-                .attr("text-anchor", "start").text(edbTo);
+                .attr("text-anchor", "start").text(edge.suffixTo);
         }
         if (edge.cktTo) {
             lg.append("text").attr("class", "ckt-label")
@@ -235,12 +239,12 @@ function renderTree(preservedTransform) {
         }
     });
 
-    // 노드
     Object.entries(nodeMap).forEach(([tag, node]) => {
         const w  = node.w;
         const ng = nodeLayer.append("g")
             .attr("class", `node node-${node.type}`)
             .attr("transform", `translate(${node.x - w / 2}, ${node.y - NODE_H / 2})`)
+            .attr("data-tag", tag)
             .style("cursor", "move")
             .call(d3.drag()
                 .on("start", _dragStart)
@@ -248,23 +252,18 @@ function renderTree(preservedTransform) {
                 .on("end",   _dragEnd)
             );
 
-        ng.attr("data-tag", tag); // 원본 tag 보관
         ng.append("rect").attr("width", w).attr("height", NODE_H).attr("rx", 5);
         ng.append("text")
             .attr("x", w / 2)
             .attr("y", NODE_H / 2 + Math.floor(FONT_PX / 2) - 1)
             .attr("text-anchor", "middle")
-            .text(displayName(tag));
+            .text(tag); // 이미 베이스 태그
 
-        // 미확장 노드에 점선 테두리 표시 (확장 가능 표시)
-        if (!node.expanded) {
-            ng.select("rect").style("stroke-dasharray", "4,3");
-        }
+        if (!node.expanded) ng.select("rect").style("stroke-dasharray", "4,3");
 
         _setupInteractions(ng, tag);
     });
 
-    // 줌 적용
     if (preservedTransform) {
         svg.call(svgZoom.transform, preservedTransform);
     } else {
@@ -280,7 +279,7 @@ function renderTree(preservedTransform) {
     }
 }
 
-// ── 5. 베지어 경로 ────────────────────────────────────────────
+// ── 5. 베지어 ─────────────────────────────────────────────────
 function _bezier(fn, tn) {
     const x1 = fn.x, y1 = fn.y + NODE_H / 2 + 2;
     const x2 = tn.x, y2 = tn.y - NODE_H / 2 - 8;
@@ -289,10 +288,7 @@ function _bezier(fn, tn) {
 }
 
 // ── 6. 드래그 ────────────────────────────────────────────────
-function _dragStart(event) {
-    _dragging = false;
-    d3.select(this).raise().classed("active", true);
-}
+function _dragStart() { _dragging = false; d3.select(this).raise().classed("active", true); }
 function _drag(event) {
     _dragging = true;
     const tag  = d3.select(this).attr("data-tag");
@@ -303,81 +299,61 @@ function _drag(event) {
     d3.select(this).attr("transform", `translate(${event.x}, ${event.y})`);
 
     d3.selectAll(".link").each(function () {
-        const l    = d3.select(this);
-        const fTag = l.attr("data-from");
-        const tTag = l.attr("data-to");
-        if (fTag === tag || tTag === tag) {
+        const l = d3.select(this);
+        const fTag = l.attr("data-from"), tTag = l.attr("data-to");
+        if (fTag === tag || tTag === tag)
             l.attr("d", _bezier(nodeMap[fTag], nodeMap[tTag]));
-        }
     });
 
-    // 라벨 위치도 노드 따라 이동
     d3.selectAll(".edge-labels").each(function () {
-        const lg   = d3.select(this);
-        const fTag = lg.attr("data-from");
-        const tTag = lg.attr("data-to");
+        const lg = d3.select(this);
+        const fTag = lg.attr("data-from"), tTag = lg.attr("data-to");
         if (fTag !== tag && tTag !== tag) return;
-
         const fn = nodeMap[fTag], tn = nodeMap[tTag];
         if (!fn || !tn) return;
         const x1 = fn.x, y1 = fn.y + NODE_H / 2 + 2;
         const x2 = tn.x, y2 = tn.y - NODE_H / 2 - 8;
-
         lg.selectAll("text").each(function () {
-            const t    = d3.select(this);
-            const role = t.attr("data-role");
-            if (role === "ckt-from") { t.attr("x", x1 - 6).attr("y", y1 + 14); }
-            if (role === "edb-from") { t.attr("x", x1 + 6).attr("y", y1 + 14); }
-            if (role === "edb-to")   { t.attr("x", x2 + 6).attr("y", y2 - 6);  }
-            if (role === "ckt-to")   { t.attr("x", x2 - 6).attr("y", y2 - 6);  }
+            const t = d3.select(this), role = t.attr("data-role");
+            if (role === "ckt-from") t.attr("x", x1 - 6).attr("y", y1 + 14);
+            if (role === "edb-from") t.attr("x", x1 + 6).attr("y", y1 + 14);
+            if (role === "edb-to")   t.attr("x", x2 + 6).attr("y", y2 - 6);
+            if (role === "ckt-to")   t.attr("x", x2 - 6).attr("y", y2 - 6);
         });
     });
 }
-function _dragEnd(event) {
+function _dragEnd() {
     d3.select(this).classed("active", false);
-    // 드래그 플래그는 클릭 이벤트 이후에 리셋
     setTimeout(() => { _dragging = false; }, 50);
 }
 
 // ── 7. 라벨 토글 ─────────────────────────────────────────────
 function toggleNodeLabels(tag) {
-    // 이 장치와 연결된 윗단(toTag===tag) / 아랫단(fromTag===tag) 그룹 분리
     const upGroups   = d3.selectAll(".edge-labels").filter(function () {
         return d3.select(this).attr("data-to") === tag;
     });
     const downGroups = d3.selectAll(".edge-labels").filter(function () {
         return d3.select(this).attr("data-from") === tag;
     });
-
-    // 윗단이 화면에 있으면 윗단만, 없으면 아랫단 사용
     const target = upGroups.size() > 0 ? upGroups : downGroups;
-
     const anyVisible = target.filter(function () {
         return d3.select(this).style("display") !== "none";
     }).size() > 0;
-
-    // 토글: 현재 표시 중이면 숨기고, 아니면 열기
-    // (반대쪽은 항상 숨김 유지)
     downGroups.style("display", "none");
     upGroups.style("display", "none");
     if (!anyVisible) target.style("display", null);
 }
 
-// ── 8. 인터랙션 설정 ─────────────────────────────────────────
-// 데스크탑: 단클릭 → 라벨 토글 / 더블클릭 → 확장
-// 모바일:   단터치 → 라벨 토글 / 길게 터치(600ms) → 확장
+// ── 8. 인터랙션 ───────────────────────────────────────────────
 function _setupInteractions(sel, tag) {
-    let clickTimer = null;  // 단클릭/더블클릭 구분용
-    let pressTimer = null;  // 모바일 길게 터치 감지
-    let longFired  = false; // 길게 터치 발동 여부
+    let clickTimer = null;
+    let pressTimer = null;
+    let longFired  = false;
 
-    // ── 데스크탑 ───────────────────────────────────────────
     sel.on("click.interact", (event) => {
         event.stopPropagation();
         if (_dragging) return;
-
         if (clickTimer) {
-            // 두 번째 클릭 → 더블클릭으로 처리
             clearTimeout(clickTimer);
             clickTimer = null;
             expandNode(tag);
@@ -389,8 +365,7 @@ function _setupInteractions(sel, tag) {
         }
     });
 
-    // ── 모바일 터치 ────────────────────────────────────────
-    sel.on("touchstart.interact", (event) => {
+    sel.on("touchstart.interact", () => {
         longFired = false;
         pressTimer = setTimeout(() => {
             longFired = true;
@@ -399,12 +374,9 @@ function _setupInteractions(sel, tag) {
         }, 600);
     })
     .on("touchend.interact", (event) => {
-        if (pressTimer) {
-            clearTimeout(pressTimer);
-            pressTimer = null;
-        }
+        if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
         if (!longFired) {
-            event.preventDefault(); // click 이벤트 중복 방지
+            event.preventDefault();
             toggleNodeLabels(tag);
         }
         longFired = false;
@@ -415,7 +387,7 @@ function _setupInteractions(sel, tag) {
     });
 }
 
-// ── 8. 열 수 조절 ────────────────────────────────────────────
+// ── 9. 열 수 조절 ────────────────────────────────────────────
 function changeColCount(delta) {
     const next = colCount + delta;
     if (next < 2) return;

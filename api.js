@@ -117,10 +117,19 @@ function renderList(items) {
     .join("");
 }
 
-// 태그 선택 (리스트 클릭)
+// 태그 선택 (리스트 클릭) → 트리 그린 후 사이드바 축소
 function selectTag(tag) {
   if (hintEl) hintEl.classList.add("hidden");
   drawTree(tag);
+  collapseSidebar();
+}
+
+function collapseSidebar() {
+  document.getElementById("sidebar").classList.add("collapsed");
+}
+
+function toggleSidebar() {
+  document.getElementById("sidebar").classList.toggle("collapsed");
 }
 
 // ── 유틸 ──────────────────────────────────────────────
