@@ -20,7 +20,11 @@ let tgt = "";            // 현재 선택된 장비 태그
 function drawTree(targetTag) {
     const svg = d3.select("#tree-svg");
     svg.selectAll("*").remove(); // 이전 트리 삭제
-    
+
+    // 안내 오버레이 숨김
+    const hintDiv = document.getElementById("hint");
+    if (hintDiv) hintDiv.classList.add("hidden");
+
     nodeMap = {};
     labelVisible = {};
     tgt = targetTag; // 전역 변수에 저장 (addEdges에서 사용)
@@ -154,8 +158,8 @@ function drawTree(targetTag) {
         setupInteractions(ng, tag);
     });
     
-    // 초기 줌 맞춤
-    svg.transition().duration(500).call(zoom.transform, d3.zoomIdentity.translate(cx, cy).scale(0.8));
+    // 초기 줌 맞춤 (노드가 containerW/2, containerH/2 기준으로 배치되므로 identity로 표시)
+    svg.call(zoom.transform, d3.zoomIdentity);
 }
 
 // ── 2. 유틸리티 함수 및 드래그 로직 ───────────────────────────
@@ -166,9 +170,9 @@ function drawTree(targetTag) {
  */
 function calculateOrthogonalPath(fn, tn, type) {
     const x1 = fn.x;
-    const y1 = fn.y + NODE_H / 2; // From 노드 하단 중심
+    const y1 = fn.y + NODE_H / 2 + 2; // From 노드 하단 (살짝 아래에서 시작)
     const x2 = tn.x;
-    const y2 = tn.y - NODE_H / 2; // To 노드 상단 중심
+    const y2 = tn.y - NODE_H / 2 - 8; // To 노드 상단 (화살표 머리 크기만큼 앞에서 끝냄)
     
     // ── 겹침 방지 핵심 로직 ────────────────────────────────
     // 수평 꺾임 위치: from 노드 하단 바로 아래 고정 간격에서 시작
