@@ -121,11 +121,12 @@ function renderList(items) {
     .join("");
 }
 
-// 태그 선택 (리스트 클릭) → 트리 그린 후 사이드바 축소
+// 태그 선택 (리스트 클릭) → 사이드바 먼저 축소 후 트리 그리기 (캔버스 크기 반영)
 function selectTag(tag) {
   if (hintEl) hintEl.classList.add("hidden");
-  drawTree(tag);
   collapseSidebar();
+  // 사이드바 transition(250ms) 완료 후 캔버스 실제 너비로 트리 그리기
+  setTimeout(() => drawTree(tag), 280);
 }
 
 function collapseSidebar() {

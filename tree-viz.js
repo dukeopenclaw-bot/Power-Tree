@@ -65,23 +65,37 @@ function drawTree(targetTag) {
     const toTags   = [...new Set(toRows.map(d =>   getBaseName(d["Equipment Tag(To)"])))]
         .filter(t => t && t !== tgt);
 
+    // 상호 공급 관계 분리 (fromTags ∩ toTags)
+    const mutualSet    = new Set(fromTags.filter(t => toTags.includes(t)));
+    const onlyFromTags = fromTags.filter(t => !mutualSet.has(t));
+    const onlyToTags   = toTags.filter(t => !mutualSet.has(t));
+    const mutualTags   = [...mutualSet];
+
     const allTags = [tgt, ...fromTags, ...toTags];
     const STEP = Math.max(...allTags.map(nodeWidth)) + H_GAP;
 
     nodeMap[tgt] = { x: cx, y: cy, type: "center", w: nodeWidth(tgt), expanded: true };
 
-    fromTags.forEach((tag, i) => {
-        const total = fromTags.length;
+    // 상호 노드 → 수평 배치 (center 오른쪽)
+    mutualTags.forEach((tag, i) => {
+        nodeMap[tag] = {
+            x: cx + (i + 1) * STEP,
+            y: cy, type: "mutual", w: nodeWidth(tag), expanded: false
+        };
+    });
+
+    onlyFromTags.forEach((tag, i) => {
+        const total = onlyFromTags.length;
         nodeMap[tag] = {
             x: cx + (i - (total - 1) / 2) * STEP,
             y: cy - V_GAP, type: "from", w: nodeWidth(tag), expanded: false
         };
     });
 
-    toTags.forEach((tag, i) => {
+    onlyToTags.forEach((tag, i) => {
         const row      = Math.floor(i / colCount);
         const col      = i % colCount;
-        const rowCount = Math.min(toTags.length - row * colCount, colCount);
+        const rowCount = Math.min(onlyToTags.length - row * colCount, colCount);
         const startX   = cx - ((rowCount - 1) * STEP) / 2;
         nodeMap[tag] = {
             x: startX + col * STEP,
@@ -203,8 +217,16 @@ function renderTree(preservedTransform) {
             .attr("d", _bezier(fn, tn))
             .attr("marker-end", "url(#arrowhead)");
 
-        const x1 = fn.x, y1 = fn.y + NODE_H / 2 + 2;
-        const x2 = tn.x, y2 = tn.y - NODE_H / 2 - 8;
+        const sameLevel = Math.abs(fn.y - tn.y) < NODE_H * 1.5;
+        const x1 = sameLevel ? fn.x + (tn.x > fn.x ?  fn.w/2+2 : -fn.w/2-2) : fn.x;
+        const y1 = sameLevel ? fn.y                                             : fn.y + NODE_H/2 + 2;
+        const x2 = sameLevel ? tn.x + (tn.x > fn.x ? -tn.w/2-8 :  tn.w/2+8) : tn.x;
+        const y2 = sameLevel ? tn.y                                             : tn.y - NODE_H/2 - 8;
+        const lFromX = sameLevel ? x1        : x1 - 6;
+        const lFromY = sameLevel ? y1 - 8    : y1 + 14;
+        const lToX   = sameLevel ? x2        : x2 - 6;
+        const lToY   = sameLevel ? y2 - 8    : y2 - 6;
+        const lAnchor = sameLevel ? "middle" : "end";
 
         const lg = labelLayer.append("g")
             .attr("class", "edge-labels")
@@ -215,27 +237,29 @@ function renderTree(preservedTransform) {
         if (edge.cktFrom) {
             lg.append("text").attr("class", "ckt-label")
                 .attr("data-role", "ckt-from")
-                .attr("x", x1 - 6).attr("y", y1 + 14)
-                .attr("text-anchor", "end").text(edge.cktFrom);
+                .attr("x", lFromX).attr("y", lFromY)
+                .attr("text-anchor", lAnchor).text(edge.cktFrom);
         }
         // -XXX는 원본 태그에서 추출한 suffixFrom/suffixTo 사용
         if (edge.suffixFrom) {
             lg.append("text").attr("class", "ckt-label edb-suffix")
                 .attr("data-role", "edb-from")
-                .attr("x", x1 + 6).attr("y", y1 + 14)
-                .attr("text-anchor", "start").text(edge.suffixFrom);
+                .attr("x", sameLevel ? x1 : x1 + 6)
+                .attr("y", sameLevel ? y1 + 14 : y1 + 14)
+                .attr("text-anchor", sameLevel ? "middle" : "start").text(edge.suffixFrom);
         }
         if (edge.suffixTo) {
             lg.append("text").attr("class", "ckt-label edb-suffix")
                 .attr("data-role", "edb-to")
-                .attr("x", x2 + 6).attr("y", y2 - 6)
-                .attr("text-anchor", "start").text(edge.suffixTo);
+                .attr("x", sameLevel ? x2 : x2 + 6)
+                .attr("y", sameLevel ? y2 + 14 : y2 - 6)
+                .attr("text-anchor", sameLevel ? "middle" : "start").text(edge.suffixTo);
         }
         if (edge.cktTo) {
             lg.append("text").attr("class", "ckt-label")
                 .attr("data-role", "ckt-to")
-                .attr("x", x2 - 6).attr("y", y2 - 6)
-                .attr("text-anchor", "end").text(edge.cktTo);
+                .attr("x", lToX).attr("y", lToY)
+                .attr("text-anchor", lAnchor).text(edge.cktTo);
         }
     });
 
@@ -269,18 +293,37 @@ function renderTree(preservedTransform) {
     } else {
         requestAnimationFrame(() => {
             try {
+                // 사이드바 축소 후 변경된 캔버스 크기를 새로 읽음
+                const c  = document.getElementById("canvas-container");
+                const cW = c.clientWidth  || 800;
+                const cH = c.clientHeight || 600;
                 const bbox = g.node().getBBox();
                 if (!bbox.width || !bbox.height) return;
-                const tx = containerW / 2 - (bbox.x + bbox.width  / 2);
-                const ty = containerH / 2 - (bbox.y + bbox.height / 2);
+                const tx = cW / 2 - (bbox.x + bbox.width  / 2);
+                const ty = cH / 2 - (bbox.y + bbox.height / 2);
                 svg.call(svgZoom.transform, d3.zoomIdentity.translate(tx, ty));
             } catch (e) { /* 무시 */ }
         });
     }
 }
 
-// ── 5. 베지어 ─────────────────────────────────────────────────
+// ── 5. 스마트 베지어 (수평/수직 자동 감지) ───────────────────
 function _bezier(fn, tn) {
+    const sameLevel = Math.abs(fn.y - tn.y) < NODE_H * 1.5;
+
+    if (sameLevel) {
+        // 수평 연결: 노드 옆면에서 시작/끝
+        const goRight = tn.x > fn.x;
+        const x1 = fn.x + (goRight ?  fn.w / 2 + 2  : -fn.w / 2 - 2);
+        const y1 = fn.y;
+        const x2 = tn.x + (goRight ? -tn.w / 2 - 8  :  tn.w / 2 + 8);
+        const y2 = tn.y;
+        const dx = Math.abs(x2 - x1) * 0.5;
+        const s  = goRight ? 1 : -1;
+        return `M${x1},${y1} C${x1+s*dx},${y1} ${x2-s*dx},${y2} ${x2},${y2}`;
+    }
+
+    // 수직 연결 (기존)
     const x1 = fn.x, y1 = fn.y + NODE_H / 2 + 2;
     const x2 = tn.x, y2 = tn.y - NODE_H / 2 - 8;
     const dy = Math.abs(y2 - y1) * 0.5;

@@ -364,6 +364,10 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 
 
 
+.node.node-mutual rect {
+  fill: #fce4ec;
+  stroke: #e91e63;
+}
 .node.node-center rect {
   fill: var(--node-center);
   stroke: var(--node-stroke-center);
@@ -438,6 +442,7 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 #legend .leg-center { background: var(--node-center); border-color: var(--node-stroke-center); }
 #legend .leg-from   { background: var(--node-from);   border-color: var(--node-stroke-from); }
 #legend .leg-to     { background: var(--node-to);     border-color: var(--node-stroke-to); }
+#legend .leg-mutual { background: #fce4ec;             border-color: #e91e63; }
 
 /* ─── Mobile (모바일 최적화) ─── */
 @media (max-width: 600px) {
