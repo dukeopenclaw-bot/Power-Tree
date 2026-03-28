@@ -42,11 +42,15 @@ async function loadData() {
 
     if (!Array.isArray(json)) throw new Error("JSON 배열 아님");
 
-    powerData = json.filter(
-      d =>
-        String(d["Equipment Tag(From)"] || "").trim() ||
-        String(d["Equipment Tag(To)"] || "").trim()
-    );
+    const isSpareOnly = tag => /^spare$/i.test(String(tag || "").trim());
+
+    powerData = json.filter(d => {
+      const ft = String(d["Equipment Tag(From)"] || "").trim();
+      const tt = String(d["Equipment Tag(To)"]   || "").trim();
+      if (!ft && !tt) return false;          // 태그 둘 다 비어있으면 제외
+      if (isSpareOnly(ft) || isSpareOnly(tt)) return false; // 단독 Spare 제외
+      return true;
+    });
 
     showStatus(`✅ ${powerData.length}개 회로 로드 완료`, "success");
     setTimeout(() => hideStatus(), 3000);
