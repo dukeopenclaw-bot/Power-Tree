@@ -22,24 +22,30 @@
 
   <!-- ── 좌측 사이드바 ── -->
   <aside id="sidebar">
-    <div class="sidebar-header">
-      <h1>Power Tree</h1>
-      <span class="version">V0.0</span>
+    <!-- 항상 표시되는 토글 버튼 -->
+    <button id="sidebar-toggle" onclick="toggleSidebar()" title="검색창 열기/닫기">☰</button>
+
+    <!-- 축소 시 숨겨지는 영역 -->
+    <div class="sidebar-inner">
+      <div class="sidebar-header">
+        <h1>Power Tree</h1>
+        <span class="version">V1.7</span>
+      </div>
+
+      <div class="search-box">
+        <input
+          type="text"
+          id="searchInput"
+          placeholder="장비 Tag 검색 (예: MCC, EDB...)"
+          autocomplete="off"
+          spellcheck="false"
+        />
+      </div>
+
+      <ul id="resultList"></ul>
+
+      <div id="status"></div>
     </div>
-
-    <div class="search-box">
-      <input
-        type="text"
-        id="searchInput"
-        placeholder="장비 Tag 검색 (예: MCC, EDB...)"
-        autocomplete="off"
-        spellcheck="false"
-      />
-    </div>
-
-    <ul id="resultList"></ul>
-
-    <div id="status"></div>
   </aside>
 
   <!-- ── 우측 캔버스 ── -->
@@ -63,6 +69,15 @@
       <div class="leg-row"><div class="leg-box leg-from"></div> 공급원 (From)</div>
       <div class="leg-row"><div class="leg-box leg-center"></div> 선택 장비</div>
       <div class="leg-row"><div class="leg-box leg-to"></div> 부하 (To)</div>
+      <div class="leg-row"><div class="leg-box leg-mutual"></div> 상호 공급</div>
+    </div>
+
+    <!-- 열 수 조절 -->
+    <div id="col-ctrl">
+      <span class="col-label">열</span>
+      <button title="열 줄이기" onclick="changeColCount(-2)">▼</button>
+      <span id="col-count">4</span>
+      <button title="열 늘리기" onclick="changeColCount(2)">▲</button>
     </div>
 
     <!-- 줌 툴바 -->
@@ -90,49 +105,35 @@
       .catch(err => console.warn('SW 등록 실패:', err));
   }
 
-  // ── 툴바 줌 제어 ─────────────────────────────────
-  function getSvgZoom() {
-    return d3.zoom().on("zoom", e => {
-      d3.select("#main-g").attr("transform", e.transform);
-    });
-  }
-
+  // ── 툴바 줌 제어 (svgZoom은 tree-viz.js 전역 변수) ──────────
   function zoomIn() {
+    if (!svgZoom) return;
     d3.select("#tree-svg").transition().duration(250)
-      .call(d3.zoom().scaleBy, 1.4);
+      .call(svgZoom.scaleBy, 1.4);
   }
 
   function zoomOut() {
+    if (!svgZoom) return;
     d3.select("#tree-svg").transition().duration(250)
-      .call(d3.zoom().scaleBy, 0.7);
+      .call(svgZoom.scaleBy, 0.7);
   }
 
   function zoomFit() {
-    const svg = d3.select("#tree-svg");
-    const g   = svg.select("#main-g");
+    if (!svgZoom) return;
+    const svg  = d3.select("#tree-svg");
+    const g    = svg.select("#main-g");
     if (g.empty()) return;
-
-    const svgEl  = document.getElementById("tree-svg");
+    const svgEl = document.getElementById("tree-svg");
     const W = svgEl.clientWidth, H = svgEl.clientHeight;
-
     try {
       const bbox = g.node().getBBox();
       if (!bbox.width || !bbox.height) return;
-
-      const scale = Math.min(
-        0.9 * W / bbox.width,
-        0.9 * H / bbox.height,
-        1.5  // 최대 1.5배로 제한
-      );
+      const scale = Math.min(0.9 * W / bbox.width, 0.9 * H / bbox.height, 1.5);
       const tx = W / 2 - scale * (bbox.x + bbox.width  / 2);
       const ty = H / 2 - scale * (bbox.y + bbox.height / 2);
-
       svg.transition().duration(400)
-        .call(
-          d3.zoom().transform,
-          d3.zoomIdentity.translate(tx, ty).scale(scale)
-        );
-    } catch (e) { /* BBox 실패 무시 */ }
+        .call(svgZoom.transform, d3.zoomIdentity.translate(tx, ty).scale(scale));
+    } catch (e) { /* 무시 */ }
   }
 
   // ── 창 크기 변경 시 트리 재렌더 ──────────────────────

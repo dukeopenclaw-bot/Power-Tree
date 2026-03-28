@@ -42,11 +42,15 @@ async function loadData() {
 
     if (!Array.isArray(json)) throw new Error("JSON 배열 아님");
 
-    powerData = json.filter(
-      d =>
-        String(d["Equipment Tag(From)"] || "").trim() ||
-        String(d["Equipment Tag(To)"] || "").trim()
-    );
+    const isSpareOnly = tag => /^spare$/i.test(String(tag || "").trim());
+
+    powerData = json.filter(d => {
+      const ft = String(d["Equipment Tag(From)"] || "").trim();
+      const tt = String(d["Equipment Tag(To)"]   || "").trim();
+      if (!ft && !tt) return false;          // 태그 둘 다 비어있으면 제외
+      if (isSpareOnly(ft) || isSpareOnly(tt)) return false; // 단독 Spare 제외
+      return true;
+    });
 
     showStatus(`✅ ${powerData.length}개 회로 로드 완료`, "success");
     setTimeout(() => hideStatus(), 3000);
@@ -94,6 +98,11 @@ function filterTags(query) {
 }
 
 // ── 검색 결과 렌더링 ──────────────────────────────────
+// 표시용 태그: EDB 포함 태그의 끝 -XXX(3자리) 제거
+function stripSuffix(tag) {
+  return /EDB/i.test(tag) ? tag.replace(/-\d{3}$/, "") : tag;
+}
+
 function renderList(items) {
   if (!items.length) {
     resultList.innerHTML =
@@ -105,17 +114,27 @@ function renderList(items) {
     .map(
       ({ tag, desc }) =>
         `<li onclick="selectTag('${esc(tag)}')">
-          <span class="tag">${esc(tag)}</span>
+          <span class="tag">${esc(stripSuffix(tag))}</span>
           ${desc ? `<span class="desc">${esc(desc)}</span>` : ""}
         </li>`
     )
     .join("");
 }
 
-// 태그 선택 (리스트 클릭)
+// 태그 선택 (리스트 클릭) → 사이드바 먼저 축소 후 트리 그리기 (캔버스 크기 반영)
 function selectTag(tag) {
   if (hintEl) hintEl.classList.add("hidden");
-  drawTree(tag);
+  collapseSidebar();
+  // 사이드바 transition(250ms) 완료 후 캔버스 실제 너비로 트리 그리기
+  setTimeout(() => drawTree(tag), 280);
+}
+
+function collapseSidebar() {
+  document.getElementById("sidebar").classList.add("collapsed");
+}
+
+function toggleSidebar() {
+  document.getElementById("sidebar").classList.toggle("collapsed");
 }
 
 // ── 유틸 ──────────────────────────────────────────────
