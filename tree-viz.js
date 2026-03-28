@@ -12,11 +12,12 @@ const CHAR_W  = 7.8;
 const PAD_X   = 18;
 
 // ── 전역 상태 ─────────────────────────────────────────────────
-let nodeMap  = {};   // tag → { x, y, type, w, expanded }
-let edgeList = [];   // 표시할 모든 엣지
-let tgt      = "";   // 최초 선택 태그
-let colCount = 4;    // 하단 열 수 (짝수)
-let svgZoom  = null; // d3 zoom 인스턴스 (renderTree 에서 초기화)
+let nodeMap   = {};   // tag → { x, y, type, w, expanded }
+let edgeList  = [];   // 표시할 모든 엣지
+let tgt       = "";   // 최초 선택 태그
+let colCount  = 4;    // 하단 열 수 (짝수)
+let svgZoom   = null; // d3 zoom 인스턴스
+let _dragging = false; // 드래그 중 클릭 방지 플래그
 
 // ── 유틸 ─────────────────────────────────────────────────────
 function nodeWidth(tag) {
@@ -183,7 +184,7 @@ function renderTree(preservedTransform) {
     const labelLayer = g.append("g").attr("class", "labels");
     const nodeLayer  = g.append("g").attr("class", "nodes");
 
-    // 엣지 + 라벨
+    // 엣지 + 라벨 (라벨은 기본 숨김, 노드 클릭 시 표시)
     edgeList.forEach(edge => {
         const fn = nodeMap[edge.fromTag];
         const tn = nodeMap[edge.toTag];
@@ -199,25 +200,32 @@ function renderTree(preservedTransform) {
         const x1 = fn.x, y1 = fn.y + NODE_H / 2 + 2;
         const x2 = tn.x, y2 = tn.y - NODE_H / 2 - 8;
 
+        // 라벨 그룹: 기본 숨김, data-from/data-to 로 식별
+        const lg = labelLayer.append("g")
+            .attr("class", "edge-labels")
+            .attr("data-from", edge.fromTag)
+            .attr("data-to",   edge.toTag)
+            .style("display", "none");
+
         if (edge.cktFrom) {
-            labelLayer.append("text").attr("class", "ckt-label")
+            lg.append("text").attr("class", "ckt-label")
                 .attr("x", x1 - 6).attr("y", y1 + 14)
                 .attr("text-anchor", "end").text(edge.cktFrom);
         }
         const edbFrom = getEdbSuffix(edge.fromTag);
         if (edbFrom) {
-            labelLayer.append("text").attr("class", "ckt-label edb-suffix")
+            lg.append("text").attr("class", "ckt-label edb-suffix")
                 .attr("x", x1 + 6).attr("y", y1 + 14)
                 .attr("text-anchor", "start").text(edbFrom);
         }
         const edbTo = getEdbSuffix(edge.toTag);
         if (edbTo) {
-            labelLayer.append("text").attr("class", "ckt-label edb-suffix")
+            lg.append("text").attr("class", "ckt-label edb-suffix")
                 .attr("x", x2 + 6).attr("y", y2 - 6)
                 .attr("text-anchor", "start").text(edbTo);
         }
         if (edge.cktTo) {
-            labelLayer.append("text").attr("class", "ckt-label")
+            lg.append("text").attr("class", "ckt-label")
                 .attr("x", x2 - 6).attr("y", y2 - 6)
                 .attr("text-anchor", "end").text(edge.cktTo);
         }
@@ -277,8 +285,12 @@ function _bezier(fn, tn) {
 }
 
 // ── 6. 드래그 ────────────────────────────────────────────────
-function _dragStart(event) { d3.select(this).raise().classed("active", true); }
+function _dragStart(event) {
+    _dragging = false;
+    d3.select(this).raise().classed("active", true);
+}
 function _drag(event) {
+    _dragging = true;
     const tag  = d3.select(this).attr("data-tag");
     const node = nodeMap[tag];
     if (!node) return;
@@ -294,26 +306,74 @@ function _drag(event) {
         }
     });
 }
-function _dragEnd(event) { d3.select(this).classed("active", false); }
+function _dragEnd(event) {
+    d3.select(this).classed("active", false);
+    // 드래그 플래그는 클릭 이벤트 이후에 리셋
+    setTimeout(() => { _dragging = false; }, 50);
+}
 
-// ── 7. 인터랙션 (더블클릭 / 길게 클릭 → 확장) ──────────────────
+// ── 7. 라벨 토글 ─────────────────────────────────────────────
+function toggleNodeLabels(tag) {
+    const groups = d3.selectAll(".edge-labels").filter(function () {
+        return d3.select(this).attr("data-from") === tag ||
+               d3.select(this).attr("data-to")   === tag;
+    });
+    const anyVisible = groups.filter(function () {
+        return d3.select(this).style("display") !== "none";
+    }).size() > 0;
+    groups.style("display", anyVisible ? "none" : null);
+}
+
+// ── 8. 인터랙션 설정 ─────────────────────────────────────────
+// 데스크탑: 단클릭 → 라벨 토글 / 더블클릭 → 확장
+// 모바일:   단터치 → 라벨 토글 / 길게 터치(600ms) → 확장
 function _setupInteractions(sel, tag) {
-    let pressTimer = null;
+    let clickTimer = null;  // 단클릭/더블클릭 구분용
+    let pressTimer = null;  // 모바일 길게 터치 감지
+    let longFired  = false; // 길게 터치 발동 여부
 
-    sel
-        .on("dblclick", (event) => {
-            event.stopPropagation();
+    // ── 데스크탑 ───────────────────────────────────────────
+    sel.on("click.interact", (event) => {
+        event.stopPropagation();
+        if (_dragging) return;
+
+        if (clickTimer) {
+            // 두 번째 클릭 → 더블클릭으로 처리
+            clearTimeout(clickTimer);
+            clickTimer = null;
             expandNode(tag);
-        })
-        .on("mousedown touchstart", (event) => {
-            pressTimer = setTimeout(() => {
-                pressTimer = null;
-                expandNode(tag);
-            }, 600);
-        })
-        .on("mouseup mouseleave touchend touchcancel", () => {
-            if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
-        });
+        } else {
+            clickTimer = setTimeout(() => {
+                clickTimer = null;
+                toggleNodeLabels(tag);
+            }, 260);
+        }
+    });
+
+    // ── 모바일 터치 ────────────────────────────────────────
+    sel.on("touchstart.interact", (event) => {
+        longFired = false;
+        pressTimer = setTimeout(() => {
+            longFired = true;
+            pressTimer = null;
+            expandNode(tag);
+        }, 600);
+    })
+    .on("touchend.interact", (event) => {
+        if (pressTimer) {
+            clearTimeout(pressTimer);
+            pressTimer = null;
+        }
+        if (!longFired) {
+            event.preventDefault(); // click 이벤트 중복 방지
+            toggleNodeLabels(tag);
+        }
+        longFired = false;
+    })
+    .on("touchcancel.interact", () => {
+        if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
+        longFired = false;
+    });
 }
 
 // ── 8. 열 수 조절 ────────────────────────────────────────────
