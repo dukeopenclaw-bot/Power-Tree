@@ -94,6 +94,11 @@ function filterTags(query) {
 }
 
 // ── 검색 결과 렌더링 ──────────────────────────────────
+// 표시용 태그: EDB 포함 태그의 끝 -XXX(3자리) 제거
+function stripSuffix(tag) {
+  return /EDB/i.test(tag) ? tag.replace(/-\d{3}$/, "") : tag;
+}
+
 function renderList(items) {
   if (!items.length) {
     resultList.innerHTML =
@@ -105,7 +110,7 @@ function renderList(items) {
     .map(
       ({ tag, desc }) =>
         `<li onclick="selectTag('${esc(tag)}')">
-          <span class="tag">${esc(tag)}</span>
+          <span class="tag">${esc(stripSuffix(tag))}</span>
           ${desc ? `<span class="desc">${esc(desc)}</span>` : ""}
         </li>`
     )
