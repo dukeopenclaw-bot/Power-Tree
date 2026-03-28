@@ -29,7 +29,7 @@
     <div class="sidebar-inner">
       <div class="sidebar-header">
         <h1>Power Tree</h1>
-        <span class="version">V1.7</span>
+        <span class="version">V1.8</span>
       </div>
 
       <div class="search-box">
@@ -88,6 +88,17 @@
     </div>
 
   </main>
+
+  <!-- 노드 정보 팝업 -->
+  <div id="node-modal" class="modal-overlay" onclick="closeNodeModal()" style="display:none">
+    <div class="modal-box" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <span id="modal-tag"></span>
+        <button class="modal-close" onclick="closeNodeModal()">✕</button>
+      </div>
+      <div id="modal-body"></div>
+    </div>
+  </div>
 </div>
 
 <!--

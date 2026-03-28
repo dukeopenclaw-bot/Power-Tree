@@ -293,15 +293,17 @@ function renderTree(preservedTransform) {
     } else {
         requestAnimationFrame(() => {
             try {
-                // 사이드바 축소 후 변경된 캔버스 크기를 새로 읽음
+                // 사이드바 축소 후 변경된 캔버스 크기를 새로 읽음 (zoomFit 방식)
                 const c  = document.getElementById("canvas-container");
                 const cW = c.clientWidth  || 800;
                 const cH = c.clientHeight || 600;
                 const bbox = g.node().getBBox();
                 if (!bbox.width || !bbox.height) return;
-                const tx = cW / 2 - (bbox.x + bbox.width  / 2);
-                const ty = cH / 2 - (bbox.y + bbox.height / 2);
-                svg.call(svgZoom.transform, d3.zoomIdentity.translate(tx, ty));
+                const scale = Math.min(0.9 * cW / bbox.width, 0.9 * cH / bbox.height, 1.5);
+                const tx = cW / 2 - scale * (bbox.x + bbox.width  / 2);
+                const ty = cH / 2 - scale * (bbox.y + bbox.height / 2);
+                svg.transition().duration(300)
+                    .call(svgZoom.transform, d3.zoomIdentity.translate(tx, ty).scale(scale));
             } catch (e) { /* 무시 */ }
         });
     }
@@ -403,7 +405,7 @@ function _setupInteractions(sel, tag) {
         } else {
             clickTimer = setTimeout(() => {
                 clickTimer = null;
-                toggleNodeLabels(tag);
+                showNodeInfo(tag);
             }, 260);
         }
     });
@@ -420,7 +422,7 @@ function _setupInteractions(sel, tag) {
         if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
         if (!longFired) {
             event.preventDefault();
-            toggleNodeLabels(tag);
+            showNodeInfo(tag);
         }
         longFired = false;
     })
@@ -437,4 +439,98 @@ function changeColCount(delta) {
     colCount = next;
     document.getElementById("col-count").textContent = colCount;
     if (tgt) drawTree(tgt);
+}
+
+// ── 10. 노드 정보 팝업 ────────────────────────────────────────
+function showNodeInfo(tag) {
+    const node = nodeMap[tag];
+    if (!node) return;
+
+    // 해당 태그가 포함된 모든 행 수집
+    const rows = powerData.filter(d =>
+        getBaseName(d["Equipment Tag(From)"]) === tag ||
+        getBaseName(d["Equipment Tag(To)"])   === tag
+    );
+
+    // Description 추출 (From 또는 To 쪽에서)
+    let desc = "";
+    for (const r of rows) {
+        if (getBaseName(r["Equipment Tag(From)"]) === tag && r["Description(From)"]) {
+            desc = r["Description(From)"]; break;
+        }
+        if (getBaseName(r["Equipment Tag(To)"]) === tag && r["Description(To)"]) {
+            desc = r["Description(To)"]; break;
+        }
+        if (r["Description"]) { desc = r["Description"]; break; }
+    }
+
+    // 공급원 (From) 목록
+    const fromList = [...new Set(
+        rows.filter(r => getBaseName(r["Equipment Tag(To)"]) === tag)
+            .map(r => r["Equipment Tag(From)"])
+            .filter(Boolean)
+    )];
+
+    // 부하 (To) 목록
+    const toList = [...new Set(
+        rows.filter(r => getBaseName(r["Equipment Tag(From)"]) === tag)
+            .map(r => r["Equipment Tag(To)"])
+            .filter(Boolean)
+    )];
+
+    // CKT 목록 (중복 제거)
+    const cktFromList = [...new Set(rows.map(r => r["CKT(From)"]).filter(Boolean))];
+    const cktToList   = [...new Set(rows.map(r => r["CKT(To)"]).filter(Boolean))];
+
+    // 위치 정보
+    const pos = `X: ${Math.round(node.x)},  Y: ${Math.round(node.y)}`;
+
+    // 추가 컬럼 키 수집 (위의 것 제외한 나머지)
+    const knownKeys = new Set([
+        "Equipment Tag(From)", "Equipment Tag(To)",
+        "Description(From)", "Description(To)", "Description",
+        "CKT(From)", "CKT(To)"
+    ]);
+    const extraKeys = rows.length > 0
+        ? Object.keys(rows[0]).filter(k => !knownKeys.has(k))
+        : [];
+    const extraRows = [...new Set(
+        rows.flatMap(r => extraKeys.map(k => r[k] ? `${k}: ${r[k]}` : "").filter(Boolean))
+    )];
+
+    // 모달 내용 구성
+    const row = (label, val) => val
+        ? `<tr><th>${label}</th><td>${val}</td></tr>` : "";
+    const listRow = (label, arr) => arr.length
+        ? `<tr><th>${label}</th><td>${arr.join("<br>")}</td></tr>` : "";
+
+    document.getElementById("modal-tag").textContent = tag;
+    document.getElementById("modal-body").innerHTML = `
+        <table class="info-table">
+          <tbody>
+            ${row("설명", desc)}
+            ${row("타입", node.type === "center" ? "선택 장비" :
+                          node.type === "from"   ? "공급원" :
+                          node.type === "mutual" ? "상호 공급" : "부하")}
+            ${listRow("공급원 (From)", fromList)}
+            ${listRow("CKT (From)", cktFromList)}
+            ${listRow("부하 (To)", toList)}
+            ${listRow("CKT (To)", cktToList)}
+            ${extraRows.map(s => `<tr><td colspan="2" class="extra-row">${s}</td></tr>`).join("")}
+            ${row("화면 좌표", pos)}
+          </tbody>
+        </table>`;
+
+    // 선택 강조
+    d3.selectAll(".node").classed("node-selected", false);
+    d3.selectAll(".node").filter(function () {
+        return d3.select(this).attr("data-tag") === tag;
+    }).classed("node-selected", true);
+
+    document.getElementById("node-modal").style.display = "flex";
+}
+
+function closeNodeModal() {
+    document.getElementById("node-modal").style.display = "none";
+    d3.selectAll(".node").classed("node-selected", false);
 }
