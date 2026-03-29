@@ -401,8 +401,8 @@ function _setupInteractions(sel, tag) {
         if (clickTimer) {
             clearTimeout(clickTimer);
             clickTimer = null;
-            // 더블클릭 → 선택장비로 지정 (트리 재구성)
-            drawTree(tag);
+            // 더블클릭 → 선택장비로 지정 (기존 노드 유지, tgt만 변경)
+            setAsCenter(tag);
         } else {
             clickTimer = setTimeout(() => {
                 clickTimer = null;
@@ -416,8 +416,8 @@ function _setupInteractions(sel, tag) {
         pressTimer = setTimeout(() => {
             longFired = true;
             pressTimer = null;
-            // 길게 터치 → 선택장비로 지정 (트리 재구성)
-            drawTree(tag);
+            // 길게 터치 → 선택장비로 지정 (기존 노드 유지, tgt만 변경)
+            setAsCenter(tag);
         }, 600);
     })
     .on("touchend.interact", (event) => {
@@ -495,6 +495,22 @@ function addTagsBatch(tags) {
 // ── 11b. 단일 태그 추가 (기존 트리 유지, from/to 포함) ────────
 function addTagToTree(tag) {
     addTagsBatch([tag]);
+}
+
+// ── 11c. 선택장비 지정 (기존 노드 유지, tgt + 타입만 변경) ──────
+function setAsCenter(tag) {
+    if (!nodeMap[tag]) return;
+    // 기존 center → from 또는 to 타입으로 원복
+    if (tgt && nodeMap[tgt]) {
+        nodeMap[tgt].type = "from"; // 이전 center는 from으로 표시
+    }
+    tgt = tag;
+    nodeMap[tag].type = "center";
+    nodeMap[tag].expanded = true;
+    // 현재 줌 유지하면서 재렌더
+    const svg = d3.select("#tree-svg");
+    const cur = svgZoom ? d3.zoomTransform(svg.node()) : null;
+    renderTree(cur);
 }
 
 // ── 12. 트리 초기화 ──────────────────────────────────────────
