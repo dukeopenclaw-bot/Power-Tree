@@ -493,11 +493,27 @@ function addTagsBatch(tags) {
         };
     });
 
-    // 각 태그의 엣지 수집 (기존 노드와 연결되는 것만 표시됨)
+    // 각 선택 장비의 공급원(from) 노드를 위쪽에 배치 + 엣지 수집
     bases.forEach(base => {
-        const fr = powerData.filter(d => getBaseName(d["Equipment Tag(To)"])   === base);
-        const tr = powerData.filter(d => getBaseName(d["Equipment Tag(From)"]) === base);
-        _collectEdges([...fr, ...tr], base);
+        const node = nodeMap[base];
+        const fromRows = powerData.filter(d => getBaseName(d["Equipment Tag(To)"]) === base);
+        const fromTags = [...new Set(fromRows.map(d => getBaseName(d["Equipment Tag(From)"])))]
+            .filter(t => t && t !== base && !nodeMap[t]);
+
+        if (fromTags.length > 0) {
+            const STEP = Math.max(...[base, ...fromTags].map(nodeWidth)) + H_GAP;
+            fromTags.forEach((t, i) => {
+                const total = fromTags.length;
+                nodeMap[t] = {
+                    x: node.x + (i - (total - 1) / 2) * STEP,
+                    y: node.y - V_GAP,
+                    type: "from",
+                    w: nodeWidth(t),
+                    expanded: false
+                };
+            });
+        }
+        _collectEdges(fromRows, base);
     });
 
     const svg = d3.select("#tree-svg");
