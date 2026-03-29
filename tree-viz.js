@@ -608,7 +608,7 @@ function setAsCenter(tag) {
     // expandNode는 더블클릭/더블탭에서만 호출 (단일 클릭 시 확장 안 함)
 }
 
-// ── 12. 자동 레이아웃 (연결 그룹별 계층 정렬) ────────────────
+// ── 12. 자동 레이아웃 (루트별 세로 열 배치) ──────────────────
 function autoLayout() {
     const tags = Object.keys(nodeMap);
     if (tags.length === 0) return;
@@ -617,85 +617,82 @@ function autoLayout() {
     const containerW = container.clientWidth || 800;
 
     // 방향 그래프 구축
-    const children = {}, parents = {};
-    tags.forEach(t => { children[t] = []; parents[t] = []; });
+    const ch = {}, pa = {};
+    tags.forEach(t => { ch[t] = []; pa[t] = []; });
     edgeList.forEach(({ fromTag: f, toTag: t }) => {
-        if (nodeMap[f] && nodeMap[t] && !children[f].includes(t)) {
-            children[f].push(t);
-            parents[t].push(f);
+        if (nodeMap[f] && nodeMap[t] && !ch[f].includes(t)) {
+            ch[f].push(t);
+            pa[t].push(f);
         }
     });
 
-    // 무방향 BFS로 연결된 컴포넌트(그룹) 탐색
-    const visited = new Set();
+    // 무방향 BFS로 연결 컴포넌트 탐색
+    const seen = new Set();
     const components = [];
     tags.forEach(start => {
-        if (visited.has(start)) return;
-        const comp = [];
-        const q = [start];
+        if (seen.has(start)) return;
+        const comp = [], q = [start];
         while (q.length) {
             const n = q.shift();
-            if (visited.has(n)) continue;
-            visited.add(n);
-            comp.push(n);
-            children[n].forEach(c => { if (!visited.has(c)) q.push(c); });
-            parents[n].forEach(p => { if (!visited.has(p)) q.push(p); });
+            if (seen.has(n)) continue;
+            seen.add(n); comp.push(n);
+            ch[n].concat(pa[n]).forEach(x => { if (!seen.has(x)) q.push(x); });
         }
         components.push(comp);
     });
 
     const LEVEL_H = NODE_H + V_GAP;
-    const COMP_GAP = 80; // 그룹 간 간격
+    const COL_GAP  = 60;  // 열 간격
+    const placed   = new Set();
+    let globalX    = 0;
 
-    // 각 컴포넌트 내 위상정렬 레벨 계산 + 상대 좌표 산출
-    const compLayouts = components.map(comp => {
-        const inDeg = {}, lvl = {};
-        comp.forEach(t => {
-            inDeg[t] = parents[t].filter(p => comp.includes(p)).length;
-            lvl[t] = 0;
-        });
-        const q = comp.filter(t => inDeg[t] === 0);
-        while (q.length) {
-            const n = q.shift();
-            children[n].filter(c => comp.includes(c)).forEach(c => {
-                lvl[c] = Math.max(lvl[c], lvl[n] + 1);
-                if (--inDeg[c] === 0) q.push(c);
+    components.forEach(comp => {
+        // 루트 노드 (컴포넌트 내에서 부모 없는 노드)
+        const roots = comp.filter(t => !pa[t].some(p => comp.includes(p)));
+        (roots.length ? roots : [comp[0]]).forEach(root => {
+            if (placed.has(root)) return;
+
+            // DFS 전위순회(pre-order) → 노드를 세로로 순서대로 쌓음
+            // 자식 1개 → 바로 아래, 여러 개 → 차례로 세로 배치
+            const order = [];
+            const stk = [root], dv = new Set();
+            while (stk.length) {
+                const n = stk.pop();
+                if (dv.has(n) || placed.has(n)) continue;
+                dv.add(n); order.push(n);
+                // 자식을 역순으로 push → pop 시 원래 순서대로 처리
+                [...ch[n]].filter(c => comp.includes(c)).reverse()
+                    .forEach(c => { if (!dv.has(c)) stk.push(c); });
+            }
+
+            // 열 너비 = 이 서브트리의 최대 노드 너비
+            const colW = Math.max(...order.map(nodeWidth));
+            const cx   = globalX + colW / 2;
+
+            // 위에서부터 차례로 쌓기
+            order.forEach((t, i) => {
+                nodeMap[t].x = cx;
+                nodeMap[t].y = i * LEVEL_H;
+                placed.add(t);
             });
-        }
-        comp.filter(t => inDeg[t] > 0).forEach(t => lvl[t] = 0); // 사이클
 
-        // 레벨별 행 그룹
-        const byLevel = {};
-        comp.forEach(t => (byLevel[lvl[t]] = byLevel[lvl[t]] || []).push(t));
-
-        // 중심 기준 상대 좌표 계산
-        let compW = 0;
-        const pos = {};
-        Object.entries(byLevel).forEach(([l, nodes]) => {
-            const maxNW = Math.max(...nodes.map(nodeWidth));
-            const step  = maxNW + H_GAP;
-            nodes.forEach((t, i) => {
-                pos[t] = { x: (i - (nodes.length - 1) / 2) * step, y: parseInt(l) * LEVEL_H };
-            });
-            compW = Math.max(compW, (nodes.length - 1) * step + maxNW);
+            globalX += colW + COL_GAP;
         });
 
-        return { comp, pos, width: Math.max(compW, nodeWidth(comp[0])) };
+        // 고립 노드 처리 (엣지 없음)
+        comp.filter(t => !placed.has(t)).forEach(t => {
+            const w = nodeWidth(t);
+            nodeMap[t].x = globalX + w / 2;
+            nodeMap[t].y = 0;
+            placed.add(t);
+            globalX += w + COL_GAP;
+        });
     });
 
-    // 전체를 가로 중앙 정렬로 컴포넌트 배치
-    const totalW = compLayouts.reduce((s, c) => s + c.width, 0)
-                 + COMP_GAP * (compLayouts.length - 1);
-    let cx = containerW / 2 - totalW / 2;
-
-    compLayouts.forEach(({ comp, pos, width }) => {
-        const compCX = cx + width / 2;
-        comp.forEach(t => {
-            nodeMap[t].x = compCX + pos[t].x;
-            nodeMap[t].y = pos[t].y + 80;
-        });
-        cx += width + COMP_GAP;
-    });
+    // 전체 캔버스 중앙 정렬
+    const xs = tags.flatMap(t => [nodeMap[t].x - nodeMap[t].w / 2, nodeMap[t].x + nodeMap[t].w / 2]);
+    const offsetX = containerW / 2 - (Math.min(...xs) + Math.max(...xs)) / 2;
+    tags.forEach(t => { nodeMap[t].x += offsetX; nodeMap[t].y += 80; });
 
     renderTree(null);
 }
