@@ -310,47 +310,6 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 #hint p { font-size: 14px; line-height: 1.6; }
 
 /* ─── 열 수 조절 ─── */
-#col-ctrl {
-  position: absolute;
-  bottom: 20px;
-  left: 20px;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  background: #fff;
-  border: 1px solid #ced4da;
-  border-radius: 4px;
-  padding: 0 8px;
-  height: 40px;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-  z-index: 20;
-}
-.col-label {
-  font-size: 12px;
-  color: #666;
-  margin-right: 2px;
-}
-#col-count {
-  font-size: 14px;
-  font-weight: 600;
-  min-width: 20px;
-  text-align: center;
-  color: #333;
-}
-#col-ctrl button {
-  width: 22px;
-  height: 26px;
-  background: #f8f9fa;
-  border: 1px solid #dee2e6;
-  border-radius: 3px;
-  font-size: 10px;
-  cursor: pointer;
-  color: #333;
-  padding: 0;
-  line-height: 1;
-}
-#col-ctrl button:hover { background: var(--accent-dim); border-color: var(--accent); }
-
 /* ─── Toolbar ─── */
 #toolbar {
   position: absolute;
@@ -379,6 +338,38 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 #toolbar button:hover { border-color: var(--accent); color: var(--accent); transform: translateY(-2px); }
 #btn-reset { border-color: #e57373; color: #e57373; }
 #btn-reset:hover { border-color: #c62828; color: #c62828; }
+/* toolbar 내 열 컨트롤 */
+.toolbar-sep {
+  width: 1px; height: 24px;
+  background: #ced4da;
+  align-self: center;
+}
+#toolbar .col-label {
+  font-size: 12px; color: #666;
+  align-self: center;
+}
+#toolbar #col-count {
+  min-width: 20px; text-align: center;
+  font-size: 14px; font-weight: 600;
+  color: #333; align-self: center;
+}
+/* top-row: 전체선택 + 선택추가 */
+.top-row {
+  display: flex !important;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px !important;
+  background: var(--bg-card, #fafafa) !important;
+  border-bottom: 1px solid var(--border, #ddd) !important;
+  cursor: default !important;
+  gap: 8px;
+}
+.top-row:hover { background: var(--bg-card, #fafafa) !important; }
+.select-all-label {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 13px; color: var(--text, #333);
+  cursor: pointer; white-space: nowrap;
+}
 
 /* ─── SVG Node Styles ─── */
 

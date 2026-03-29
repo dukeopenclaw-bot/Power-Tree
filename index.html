@@ -29,7 +29,7 @@
     <div class="sidebar-inner">
       <div class="sidebar-header">
         <h1>Power Tree</h1>
-        <span class="version">V2.3</span>
+        <span class="version">V2.4</span>
       </div>
 
       <div class="search-box">
@@ -72,20 +72,17 @@
       <div class="leg-row"><div class="leg-box leg-mutual"></div> 상호 공급</div>
     </div>
 
-    <!-- 열 수 조절 -->
-    <div id="col-ctrl">
-      <span class="col-label">열</span>
-      <button title="열 줄이기" onclick="changeColCount(-2)">▼</button>
-      <span id="col-count">4</span>
-      <button title="열 늘리기" onclick="changeColCount(2)">▲</button>
-    </div>
-
-    <!-- 줌 툴바 -->
+    <!-- 줌 툴바 + 열 수 조절 (통합) -->
     <div id="toolbar">
       <button title="줌 인"  onclick="zoomIn()">＋</button>
       <button title="줌 아웃" onclick="zoomOut()">－</button>
       <button title="화면 맞춤" onclick="zoomFit()">⊙</button>
       <button title="초기화" onclick="resetTree()" id="btn-reset">↺</button>
+      <span class="toolbar-sep"></span>
+      <span class="col-label">열</span>
+      <button title="열 줄이기" onclick="changeColCount(-2)">▼</button>
+      <span id="col-count">4</span>
+      <button title="열 늘리기" onclick="changeColCount(2)">▲</button>
     </div>
 
   </main>

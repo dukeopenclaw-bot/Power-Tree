@@ -117,8 +117,21 @@ function renderList(items) {
     return;
   }
 
+  const allSelected = items.every(({ tag }) => selectedTags.has(tag));
+
+  const topRow = `<li class="add-row top-row">
+    <label class="select-all-label">
+      <input type="checkbox" id="chk-all" ${allSelected ? "checked" : ""}
+             onchange="toggleSelectAll(this.checked)"> 전체선택
+    </label>
+    <button id="add-sel-btn" onclick="addSelected()"
+            ${selectedTags.size === 0 ? "disabled" : ""}>
+      선택 추가 <span id="sel-count">(${selectedTags.size})</span>
+    </button>
+  </li>`;
+
   const rows = items.map(({ tag, desc, hint }) => {
-    const checked  = selectedTags.has(tag) ? "checked" : "";
+    const checked   = selectedTags.has(tag) ? "checked" : "";
     const hintBadge = hint ? `<span class="search-hint">${esc(hint)}</span>` : "";
     return `<li class="result-item${selectedTags.has(tag) ? " selected" : ""}"
                onclick="toggleSelect('${esc(tag)}')">
@@ -130,23 +143,25 @@ function renderList(items) {
     </li>`;
   }).join("");
 
-  const addRow = `<li class="add-row">
-    <button id="add-sel-btn" onclick="addSelected()"
-            ${selectedTags.size === 0 ? "disabled" : ""}>
-      선택 추가 <span id="sel-count">(${selectedTags.size})</span>
-    </button>
-  </li>`;
-
-  resultList.innerHTML = rows + addRow;
+  resultList.innerHTML = topRow + rows;
 }
 
 // ── 선택 토글 ─────────────────────────────────────────
 function toggleSelect(tag) {
   if (selectedTags.has(tag)) selectedTags.delete(tag);
   else selectedTags.add(tag);
-  // 목록 다시 렌더링 (체크 상태 반영)
   const val = searchInput.value.trim();
   if (val) renderList(filterTags(val));
+}
+
+// ── 전체 선택 / 해제 ──────────────────────────────────
+function toggleSelectAll(checked) {
+  const val = searchInput.value.trim();
+  if (!val) return;
+  const items = filterTags(val);
+  if (checked) items.forEach(({ tag }) => selectedTags.add(tag));
+  else         items.forEach(({ tag }) => selectedTags.delete(tag));
+  renderList(items);
 }
 
 // ── 선택 항목 트리에 추가 ─────────────────────────────
