@@ -796,38 +796,35 @@ function showNodeInfo(tag) {
     const node = nodeMap[tag];
     if (!node) return;
 
-    // 해당 태그가 포함된 모든 행 수집
-    const rows = powerData.filter(d =>
-        getBaseName(d["Equipment Tag(From)"]) === tag ||
-        getBaseName(d["Equipment Tag(To)"])   === tag
-    );
+    // 이 장비가 To(수전)일 때의 행만 수집
+    const toRows = powerData.filter(d => getBaseName(d["Equipment Tag(To)"]) === tag);
 
-    // 설명 (Description)
+    // 설명: To쪽 정보만 (장치가 To일 때의 Description(To))
     let desc = "";
-    for (const r of rows) {
-        if (getBaseName(r["Equipment Tag(From)"]) === tag && r["Description(From)"]) {
-            desc = r["Description(From)"]; break;
-        }
-        if (getBaseName(r["Equipment Tag(To)"]) === tag && r["Description(To)"]) {
-            desc = r["Description(To)"]; break;
-        }
-        if (r["Description"]) { desc = r["Description"]; break; }
+    for (const r of toRows) {
+        if (r["Description(To)"]) { desc = r["Description(To)"]; break; }
+        if (r["Description"])     { desc = r["Description"];     break; }
     }
 
-    // 위치 - 컬럼명에 location/위치/area/zone 포함되는 것 자동 탐색
+    // 위치: To쪽 Location(To) 또는 location/위치 포함 컬럼
     let location = "";
-    if (rows.length > 0) {
-        const locKey = Object.keys(rows[0]).find(k => /location|위치|area|zone/i.test(k));
+    for (const r of toRows) {
+        if (r["Location(To)"]) { location = r["Location(To)"]; break; }
+    }
+    if (!location && toRows.length > 0) {
+        const locKey = Object.keys(toRows[0]).find(k => /location|위치/i.test(k));
         if (locKey) {
-            for (const r of rows) { if (r[locKey]) { location = r[locKey]; break; } }
+            for (const r of toRows) { if (r[locKey]) { location = r[locKey]; break; } }
         }
     }
 
-    // 이 노드로 들어오는 엣지 (화면에 있는 공급원 → 이 노드)
-    const incomingRows = rows.filter(r =>
-        getBaseName(r["Equipment Tag(To)"]) === tag &&
+    // 화면에 표시된 공급원이 있는 행만 (공급원 노드가 nodeMap에 있어야 함)
+    const incomingRows = toRows.filter(r =>
         nodeMap[getBaseName(r["Equipment Tag(From)"])]
     );
+
+    // 공급원: 원본 Equipment Tag(From) 포함 (EDB -XXX 세자리 유지)
+    const sourceList = [...new Set(incomingRows.map(r => r["Equipment Tag(From)"]).filter(Boolean))];
 
     // 상단 CKT: 공급원 측 회로 번호 (CKT(From))
     const upstreamCkt = [...new Set(incomingRows.map(r => r["CKT(From)"]).filter(Boolean))];
@@ -835,7 +832,7 @@ function showNodeInfo(tag) {
     // 자기 CKT: 이 노드의 수전 회로 번호 (CKT(To))
     const ownCkt = [...new Set(incomingRows.map(r => r["CKT(To)"]).filter(Boolean))];
 
-    // EDB 회로 목록: -XXX 세자리 번호
+    // EDB 회로 목록: 자신이 From일 때 -XXX 세자리 번호
     let edbSuffixes = [];
     if (/EDB/i.test(tag)) {
         edbSuffixes = [...new Set(
@@ -857,6 +854,7 @@ function showNodeInfo(tag) {
           <tbody>
             ${row("설명", desc)}
             ${row("위치", location)}
+            ${listRow("공급원", sourceList)}
             ${listRow("상단 CKT", upstreamCkt)}
             ${listRow("자기 CKT", ownCkt)}
             ${edbSuffixes.length ? `<tr><th>회로</th><td>${edbSuffixes.join(", ")}</td></tr>` : ""}
