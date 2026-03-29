@@ -137,9 +137,10 @@ function renderList(items) {
                onclick="toggleSelect('${esc(tag)}')">
       <input type="checkbox" class="result-cb" ${checked}
              onclick="event.stopPropagation();toggleSelect('${esc(tag)}')">
-      <span class="tag">${esc(tag)}</span>
-      ${hintBadge}
-      ${desc ? `<span class="desc">${esc(desc)}</span>` : ""}
+      <div class="result-text">
+        <span class="tag">${esc(tag)}${hintBadge}</span>
+        ${desc ? `<span class="desc">${esc(desc)}</span>` : ""}
+      </div>
     </li>`;
   }).join("");
 
