@@ -493,28 +493,37 @@ function addTagsBatch(tags) {
         };
     });
 
-    // 각 선택 장비의 공급원(from) 노드를 위쪽에 배치 + 엣지 수집
+    // 모든 선택 장비의 공급원을 한번에 수집 (중복 제거)
+    const allFromTags = [];
+    const fromRowsMap = {}; // base → fromRows (엣지 수집용)
     bases.forEach(base => {
-        const node = nodeMap[base];
         const fromRows = powerData.filter(d => getBaseName(d["Equipment Tag(To)"]) === base);
-        const fromTags = [...new Set(fromRows.map(d => getBaseName(d["Equipment Tag(From)"])))]
-            .filter(t => t && t !== base && !nodeMap[t]);
-
-        if (fromTags.length > 0) {
-            const STEP = Math.max(...[base, ...fromTags].map(nodeWidth)) + H_GAP;
-            fromTags.forEach((t, i) => {
-                const total = fromTags.length;
-                nodeMap[t] = {
-                    x: node.x + (i - (total - 1) / 2) * STEP,
-                    y: node.y - V_GAP,
-                    type: "from",
-                    w: nodeWidth(t),
-                    expanded: false
-                };
-            });
-        }
-        _collectEdges(fromRows, base);
+        fromRowsMap[base] = fromRows;
+        fromRows.forEach(d => {
+            const t = getBaseName(d["Equipment Tag(From)"]);
+            if (t && t !== base && !nodeMap[t] && !allFromTags.includes(t)) {
+                allFromTags.push(t);
+            }
+        });
     });
+
+    // 공급원 노드를 선택 장비 위에 한 줄로 배치
+    if (allFromTags.length > 0) {
+        const fromCellW = Math.max(...allFromTags.map(nodeWidth)) + H_GAP;
+        const fromStartX = centerX - ((allFromTags.length - 1) * fromCellW) / 2;
+        allFromTags.forEach((t, i) => {
+            nodeMap[t] = {
+                x: fromStartX + i * fromCellW,
+                y: baseY - V_GAP,
+                type: "from",
+                w: nodeWidth(t),
+                expanded: false
+            };
+        });
+    }
+
+    // 엣지 수집
+    bases.forEach(base => _collectEdges(fromRowsMap[base], base));
 
     const svg = d3.select("#tree-svg");
     const cur = svgZoom ? d3.zoomTransform(svg.node()) : null;
