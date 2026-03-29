@@ -753,13 +753,18 @@ function _positionTooltip(tag) {
     }
 
     const W  = window.innerWidth, H = window.innerHeight;
+
+    // 화면 크기 기반 max-width/max-height 동적 적용 (모바일 대응)
+    el.style.maxWidth  = Math.min(320, W - 16) + "px";
+    el.style.maxHeight = Math.min(Math.floor(H * 0.65), H - 32) + "px";
+
     const tw = el.offsetWidth  || 260;
     const th = el.offsetHeight || 120;
 
     let x = screenX - tw / 2;
-    let y = nodeBottom + 6; // 노드 바로 아래, 겹치지 않게
+    let y = nodeBottom + 6;
 
-    // 아래 공간 부족 → 노드 위쪽에 배치 (겹침 없음)
+    // 아래 공간 부족 → 노드 위쪽에 배치
     if (y + th > H - 8) y = nodeTop - th - 6;
     // 위로 넘침 보정
     if (y < 8) y = 8;
