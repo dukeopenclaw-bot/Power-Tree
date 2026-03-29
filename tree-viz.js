@@ -75,13 +75,13 @@ function drawTree(targetTag) {
     // 상호 공급 관계 분리 (fromTags ∩ toTags)
     const mutualSet    = new Set(fromTags.filter(t => toTags.includes(t)));
     const onlyFromTags = fromTags.filter(t => !mutualSet.has(t));
-    const onlyToTags   = toTags.filter(t => !mutualSet.has(t));
     const mutualTags   = [...mutualSet];
 
-    const allTags = [tgt, ...fromTags, ...toTags];
+    const allTags = [tgt, ...fromTags, ...mutualTags];
     const STEP = Math.max(...allTags.map(nodeWidth)) + H_GAP;
 
-    nodeMap[tgt] = { x: cx, y: cy, type: "center", w: nodeWidth(tgt), expanded: true };
+    // 초기 표시: 공급원(from) + 상호 노드만. 부하(to)는 더블클릭으로 확장.
+    nodeMap[tgt] = { x: cx, y: cy, type: "center", w: nodeWidth(tgt), expanded: false };
 
     // 상호 노드 → 수평 배치 (center 오른쪽)
     mutualTags.forEach((tag, i) => {
@@ -99,19 +99,8 @@ function drawTree(targetTag) {
         };
     });
 
-    onlyToTags.forEach((tag, i) => {
-        const row      = Math.floor(i / colCount);
-        const col      = i % colCount;
-        const rowCount = Math.min(onlyToTags.length - row * colCount, colCount);
-        const startX   = cx - ((rowCount - 1) * STEP) / 2;
-        nodeMap[tag] = {
-            x: startX + col * STEP,
-            y: cy + V_GAP + row * (NODE_H + V_GAP * 0.6),
-            type: "to", w: nodeWidth(tag), expanded: false
-        };
-    });
-
-    _collectEdges([...fromRows, ...toRows], tgt);
+    // 부하(to) 노드는 초기에 배치하지 않음 → 더블클릭 시 expandNode로 표시
+    _collectEdges(fromRows, tgt);
     renderTree(null);
 }
 
