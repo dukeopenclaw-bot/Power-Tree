@@ -395,11 +395,12 @@ const _hasHover = window.matchMedia("(hover: hover) and (pointer: fine)").matche
 
 // ── 8. 인터랙션 ───────────────────────────────────────────────
 function _setupInteractions(sel, tag) {
-    let pressTimer = null;
-    let longFired  = false;
+    let pressTimer  = null;
+    let longFired   = false;
+    let lastTapTime = 0; // 모바일 더블탭 감지용
 
     if (_hasHover) {
-        // ── PC: 호버 → 정보 툴팁, 클릭 → 선택장비 지정 ─────────
+        // ── PC: 호버 → 툴팁, 클릭 → 선택장비, 더블클릭 → 확장 ───
         sel.on("mouseenter.interact", (event) => {
             if (_tooltipHideTimer) { clearTimeout(_tooltipHideTimer); _tooltipHideTimer = null; }
             if (!_dragging) showNodeInfo(tag, event.clientX, event.clientY);
@@ -416,23 +417,37 @@ function _setupInteractions(sel, tag) {
         .on("click.interact", (event) => {
             event.stopPropagation();
             if (_dragging) return;
+            setAsCenter(tag); // 색상만 변경, 확장 없음
+        })
+        .on("dblclick.interact", (event) => {
+            event.stopPropagation();
             setAsCenter(tag);
+            if (!nodeMap[tag].expanded) expandNode(tag); // 더블클릭 시 부하 확장
         });
     } else {
-        // ── 모바일: 탭 → 정보 표시, 길게 터치 → 선택장비 지정 ───
+        // ── 모바일: 탭 → 툴팁, 더블탭 → 확장, 길게 터치 → 선택장비 ─
         sel.on("touchstart.interact", () => {
             longFired = false;
             pressTimer = setTimeout(() => {
                 longFired = true;
                 pressTimer = null;
-                setAsCenter(tag);
+                setAsCenter(tag); // 길게 누르기 → 선택장비 (확장 없음)
             }, 600);
         })
         .on("touchend.interact", (event) => {
             if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
             if (!longFired) {
                 event.preventDefault();
-                showNodeInfo(tag);
+                const now = Date.now();
+                if (now - lastTapTime < 300) {
+                    // 더블탭 → 확장
+                    setAsCenter(tag);
+                    if (!nodeMap[tag].expanded) expandNode(tag);
+                    lastTapTime = 0;
+                } else {
+                    showNodeInfo(tag); // 단일 탭 → 툴팁
+                    lastTapTime = now;
+                }
             }
             longFired = false;
         })
@@ -590,11 +605,7 @@ function setAsCenter(tag) {
     d3.selectAll(".node")
         .filter(function() { return d3.select(this).attr("data-tag") === tag; })
         .attr("class", "node node-center");
-
-    // 미확장 상태면 연결 노드(from/to) 펼치기
-    if (!nodeMap[tag].expanded) {
-        expandNode(tag); // 내부에서 renderTree 호출
-    }
+    // expandNode는 더블클릭/더블탭에서만 호출 (단일 클릭 시 확장 안 함)
 }
 
 // ── 12. 트리 초기화 ──────────────────────────────────────────
