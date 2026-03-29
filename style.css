@@ -101,10 +101,27 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
   overflow: hidden;
 }
 #sidebar.collapsed {
-  width: 44px;
-  min-width: 44px;
+  width: 0;
+  min-width: 0;
+  border-right: none;
+  box-shadow: none;
+  overflow: visible;
 }
 #sidebar.collapsed .sidebar-inner { display: none; }
+/* 축소시 토글 버튼만 캔버스 위에 플로팅 아이콘으로 표시 */
+#sidebar.collapsed #sidebar-toggle {
+  position: fixed;
+  left: 0;
+  top: 10px;
+  z-index: 50;
+  width: 36px;
+  height: 36px;
+  border-radius: 0 8px 8px 0;
+  border: 1px solid var(--sidebar-border);
+  border-left: none;
+  background: rgba(255,255,255,0.93);
+  box-shadow: 2px 0 8px rgba(0,0,0,0.18);
+}
 
 #sidebar-toggle {
   flex-shrink: 0;

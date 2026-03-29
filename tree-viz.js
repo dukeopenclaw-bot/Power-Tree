@@ -522,13 +522,13 @@ function _addSingleWithConnections(base) {
     const toTags   = [...new Set(toRows.map(d => getBaseName(d["Equipment Tag(To)"])))]
         .filter(t => t && t !== base && !nodeMap[t]);
 
-    const mutualSet    = new Set(fromTags.filter(t => toTags.includes(t)));
-    const onlyFrom     = fromTags.filter(t => !mutualSet.has(t));
-    const onlyTo       = toTags.filter(t => !mutualSet.has(t));
-    const mutuals      = [...mutualSet];
-    const STEP = Math.max(...[base, ...fromTags, ...toTags].map(nodeWidth)) + H_GAP;
+    const mutualSet = new Set(fromTags.filter(t => toTags.includes(t)));
+    const onlyFrom  = fromTags.filter(t => !mutualSet.has(t));
+    const mutuals   = [...mutualSet];
+    const STEP = Math.max(...[base, ...fromTags].map(nodeWidth)) + H_GAP;
 
-    nodeMap[base] = { x: cx, y: cy, type: "center", w: nodeWidth(base), expanded: true };
+    // 초기 표시: 공급원(from) + 상호 노드만. 부하(to)는 클릭으로 확장.
+    nodeMap[base] = { x: cx, y: cy, type: "center", w: nodeWidth(base), expanded: false };
     mutuals.forEach((t, i) => {
         nodeMap[t] = { x: cx + (i+1)*STEP, y: cy, type: "mutual", w: nodeWidth(t), expanded: false };
     });
@@ -536,16 +536,7 @@ function _addSingleWithConnections(base) {
         const total = onlyFrom.length;
         nodeMap[t] = { x: cx + (i-(total-1)/2)*STEP, y: cy - V_GAP, type: "from", w: nodeWidth(t), expanded: false };
     });
-    onlyTo.forEach((t, i) => {
-        const row = Math.floor(i/colCount), col = i%colCount;
-        const rowCount = Math.min(onlyTo.length - row*colCount, colCount);
-        nodeMap[t] = {
-            x: cx - ((rowCount-1)*STEP)/2 + col*STEP,
-            y: cy + V_GAP + row*(NODE_H + V_GAP*0.6),
-            type: "to", w: nodeWidth(t), expanded: false
-        };
-    });
-    _collectEdges([...fromRows, ...toRows], base);
+    _collectEdges(fromRows, base);
 
     const svg = d3.select("#tree-svg");
     const cur = svgZoom ? d3.zoomTransform(svg.node()) : null;
@@ -590,6 +581,15 @@ function resetTree() {
     d3.select("#tree-svg").selectAll("*").remove();
     const hint = document.getElementById("hint");
     if (hint) hint.classList.remove("hidden");
+    closeNodeModal();
+    // 검색창 초기화 + 사이드바 열기
+    const si = document.getElementById("searchInput");
+    if (si) si.value = "";
+    const rl = document.getElementById("resultList");
+    if (rl) rl.innerHTML = "";
+    if (typeof selectedTags !== "undefined") selectedTags.clear();
+    const sb = document.getElementById("sidebar");
+    if (sb) sb.classList.remove("collapsed");
 }
 
 // ── 10. 노드 정보 툴팁 ───────────────────────────────────────
@@ -704,13 +704,18 @@ function showNodeInfo(tag, clientX, clientY) {
     }).classed("node-selected", true);
 
     const el = document.getElementById("node-tooltip");
-    el.style.display = "block";
-    // 위치: 좌표가 전달되면 사용, 없으면 화면 중앙 우측
+    // 먼저 초기 위치 설정 후 표시 (위치 없이 block하면 좌상단에 순간 깜빡임)
     if (clientX !== undefined) {
-        requestAnimationFrame(() => _positionTooltip(clientX, clientY));
+        el.style.left = (clientX + 18) + "px";
+        el.style.top  = (Math.max(8, clientY - 10)) + "px";
     } else {
         el.style.left = (window.innerWidth / 2 + 20) + "px";
         el.style.top  = "80px";
+    }
+    el.style.display = "block";
+    // 렌더 후 뷰포트 넘침 보정
+    if (clientX !== undefined) {
+        requestAnimationFrame(() => _positionTooltip(clientX, clientY));
     }
 }
 
