@@ -12,12 +12,13 @@ const CHAR_W  = 7.8;
 const PAD_X   = 18;
 
 // ── 전역 상태 ─────────────────────────────────────────────────
-let nodeMap   = {};
-let edgeList  = [];
-let tgt       = "";   // 베이스 태그 (EDB-001 → EDB)
-let colCount  = 4;
-let svgZoom   = null;
-let _dragging = false;
+let nodeMap          = {};
+let edgeList         = [];
+let tgt              = "";   // 베이스 태그 (EDB-001 → EDB)
+let colCount         = 4;
+let svgZoom          = null;
+let _dragging        = false;
+let _tooltipHideTimer = null;
 
 // ── 유틸 ─────────────────────────────────────────────────────
 function nodeWidth(tag) {
@@ -398,16 +399,19 @@ function _setupInteractions(sel, tag) {
     let longFired  = false;
 
     if (_hasHover) {
-        // ── PC: 호버 → 정보 표시, 클릭 → 선택장비 지정 ──────────
-        sel.on("mouseenter.interact", () => {
-            if (!_dragging) showNodeInfo(tag);
+        // ── PC: 호버 → 정보 툴팁, 클릭 → 선택장비 지정 ─────────
+        sel.on("mouseenter.interact", (event) => {
+            if (_tooltipHideTimer) { clearTimeout(_tooltipHideTimer); _tooltipHideTimer = null; }
+            if (!_dragging) showNodeInfo(tag, event.clientX, event.clientY);
+        })
+        .on("mousemove.interact", (event) => {
+            _positionTooltip(event.clientX, event.clientY);
         })
         .on("mouseleave.interact", () => {
-            // 모달로 마우스가 이동하면 닫지 않음
-            setTimeout(() => {
-                const modal = document.getElementById("node-modal");
-                if (modal && !modal.matches(":hover")) closeNodeModal();
-            }, 80);
+            _tooltipHideTimer = setTimeout(() => {
+                _tooltipHideTimer = null;
+                closeNodeModal();
+            }, 120);
         })
         .on("click.interact", (event) => {
             event.stopPropagation();
@@ -588,8 +592,33 @@ function resetTree() {
     if (hint) hint.classList.remove("hidden");
 }
 
-// ── 10. 노드 정보 팝업 ────────────────────────────────────────
-function showNodeInfo(tag) {
+// ── 10. 노드 정보 툴팁 ───────────────────────────────────────
+function _positionTooltip(cx, cy) {
+    const el = document.getElementById("node-tooltip");
+    if (!el) return;
+    const W = window.innerWidth, H = window.innerHeight;
+    const tw = el.offsetWidth  || 280;
+    const th = el.offsetHeight || 200;
+    let x = cx + 18;
+    let y = cy - 10;
+    if (x + tw > W - 12) x = cx - tw - 18;
+    if (y + th > H - 12) y = H - th - 12;
+    if (y < 8) y = 8;
+    el.style.left = x + "px";
+    el.style.top  = y + "px";
+}
+
+// 툴팁 hover 유지 (초기화 1회)
+document.addEventListener("DOMContentLoaded", () => {
+    const el = document.getElementById("node-tooltip");
+    if (!el) return;
+    el.addEventListener("mouseenter", () => {
+        if (_tooltipHideTimer) { clearTimeout(_tooltipHideTimer); _tooltipHideTimer = null; }
+    });
+    el.addEventListener("mouseleave", () => { closeNodeModal(); });
+});
+
+function showNodeInfo(tag, clientX, clientY) {
     const node = nodeMap[tag];
     if (!node) return;
 
@@ -674,10 +703,19 @@ function showNodeInfo(tag) {
         return d3.select(this).attr("data-tag") === tag;
     }).classed("node-selected", true);
 
-    document.getElementById("node-modal").style.display = "flex";
+    const el = document.getElementById("node-tooltip");
+    el.style.display = "block";
+    // 위치: 좌표가 전달되면 사용, 없으면 화면 중앙 우측
+    if (clientX !== undefined) {
+        requestAnimationFrame(() => _positionTooltip(clientX, clientY));
+    } else {
+        el.style.left = (window.innerWidth / 2 + 20) + "px";
+        el.style.top  = "80px";
+    }
 }
 
 function closeNodeModal() {
-    document.getElementById("node-modal").style.display = "none";
+    const el = document.getElementById("node-tooltip");
+    if (el) el.style.display = "none";
     d3.selectAll(".node").classed("node-selected", false);
 }
