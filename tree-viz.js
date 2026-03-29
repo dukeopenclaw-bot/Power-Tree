@@ -401,12 +401,9 @@ function _setupInteractions(sel, tag) {
 
     if (_hasHover) {
         // ── PC: 호버 → 툴팁, 클릭 → 선택장비, 더블클릭 → 확장 ───
-        sel.on("mouseenter.interact", (event) => {
+        sel.on("mouseenter.interact", () => {
             if (_tooltipHideTimer) { clearTimeout(_tooltipHideTimer); _tooltipHideTimer = null; }
-            if (!_dragging) showNodeInfo(tag, event.clientX, event.clientY);
-        })
-        .on("mousemove.interact", (event) => {
-            _positionTooltip(event.clientX, event.clientY);
+            if (!_dragging) showNodeInfo(tag);
         })
         .on("mouseleave.interact", () => {
             _tooltipHideTimer = setTimeout(() => {
@@ -719,17 +716,33 @@ function resetTree() {
 }
 
 // ── 10. 노드 정보 툴팁 ───────────────────────────────────────
-function _positionTooltip(cx, cy) {
+// 노드 바로 아래(SVG 좌표 → 화면 좌표 변환)에 툴팁 배치
+function _positionTooltip(tag) {
     const el = document.getElementById("node-tooltip");
-    if (!el) return;
-    const W = window.innerWidth, H = window.innerHeight;
+    if (!el || !nodeMap[tag]) return;
+
+    const svgEl  = document.getElementById("tree-svg");
+    const rect   = svgEl.getBoundingClientRect();
+    const tr     = svgZoom ? d3.zoomTransform(svgEl) : d3.zoomIdentity;
+    const node   = nodeMap[tag];
+
+    // 노드 하단 중앙의 화면 좌표
+    const screenX = rect.left + tr.applyX(node.x);
+    const screenY = rect.top  + tr.applyY(node.y + NODE_H / 2 + 2);
+
+    const W  = window.innerWidth, H = window.innerHeight;
     const tw = el.offsetWidth  || 280;
     const th = el.offsetHeight || 200;
-    let x = cx + 18;
-    let y = cy - 10;
-    if (x + tw > W - 12) x = cx - tw - 18;
-    if (y + th > H - 12) y = H - th - 12;
+
+    let x = screenX - tw / 2;
+    let y = screenY + 8;
+
+    // 뷰포트 넘침 보정
+    if (x + tw > W - 8) x = W - tw - 8;
+    if (x < 8) x = 8;
+    if (y + th > H - 8) y = screenY - NODE_H - th - 8; // 공간 없으면 위로
     if (y < 8) y = 8;
+
     el.style.left = x + "px";
     el.style.top  = y + "px";
 }
@@ -744,7 +757,7 @@ document.addEventListener("DOMContentLoaded", () => {
     el.addEventListener("mouseleave", () => { closeNodeModal(); });
 });
 
-function showNodeInfo(tag, clientX, clientY) {
+function showNodeInfo(tag) {
     const node = nodeMap[tag];
     if (!node) return;
 
@@ -830,19 +843,9 @@ function showNodeInfo(tag, clientX, clientY) {
     }).classed("node-selected", true);
 
     const el = document.getElementById("node-tooltip");
-    // 먼저 초기 위치 설정 후 표시 (위치 없이 block하면 좌상단에 순간 깜빡임)
-    if (clientX !== undefined) {
-        el.style.left = (clientX + 18) + "px";
-        el.style.top  = (Math.max(8, clientY - 10)) + "px";
-    } else {
-        el.style.left = (window.innerWidth / 2 + 20) + "px";
-        el.style.top  = "80px";
-    }
+    el.style.left    = "-9999px"; // 렌더 전 화면 밖에서 크기 계산
     el.style.display = "block";
-    // 렌더 후 뷰포트 넘침 보정
-    if (clientX !== undefined) {
-        requestAnimationFrame(() => _positionTooltip(clientX, clientY));
-    }
+    requestAnimationFrame(() => _positionTooltip(tag)); // 노드 아래에 배치
 }
 
 function closeNodeModal() {
