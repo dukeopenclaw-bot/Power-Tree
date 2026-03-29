@@ -608,7 +608,62 @@ function setAsCenter(tag) {
     // expandNode는 더블클릭/더블탭에서만 호출 (단일 클릭 시 확장 안 함)
 }
 
-// ── 12. 트리 초기화 ──────────────────────────────────────────
+// ── 12. 자동 레이아웃 (계층 정렬) ────────────────────────────
+function autoLayout() {
+    const tags = Object.keys(nodeMap);
+    if (tags.length === 0) return;
+
+    const container = document.getElementById("canvas-container");
+    const containerW = container.clientWidth || 800;
+
+    // 방향 그래프 구축 (공급원 → 부하)
+    const children = {}, parents = {};
+    tags.forEach(t => { children[t] = []; parents[t] = []; });
+    edgeList.forEach(({ fromTag: f, toTag: t }) => {
+        if (nodeMap[f] && nodeMap[t] && !children[f].includes(t)) {
+            children[f].push(t);
+            parents[t].push(f);
+        }
+    });
+
+    // Kahn 알고리즘으로 위상 정렬 + 레벨(깊이) 계산
+    const level = {};
+    const inDeg = {};
+    tags.forEach(t => { level[t] = 0; inDeg[t] = parents[t].length; });
+    const queue = tags.filter(t => inDeg[t] === 0);
+
+    while (queue.length > 0) {
+        const n = queue.shift();
+        children[n].forEach(c => {
+            level[c] = Math.max(level[c], level[n] + 1);
+            if (--inDeg[c] === 0) queue.push(c);
+        });
+    }
+    // 사이클 노드는 레벨 0으로
+    tags.filter(t => inDeg[t] > 0).forEach(t => level[t] = 0);
+
+    // 레벨별 그룹화
+    const byLevel = {};
+    tags.forEach(t => {
+        const l = level[t];
+        (byLevel[l] = byLevel[l] || []).push(t);
+    });
+
+    // 레벨별 Y 좌표 및 X 균등 배분
+    Object.entries(byLevel).forEach(([l, nodes]) => {
+        const y = parseInt(l) * (NODE_H + V_GAP) + 80;
+        const STEP = Math.max(...nodes.map(nodeWidth)) + H_GAP;
+        const startX = containerW / 2 - ((nodes.length - 1) * STEP) / 2;
+        nodes.forEach((t, i) => {
+            nodeMap[t].x = startX + i * STEP;
+            nodeMap[t].y = y;
+        });
+    });
+
+    renderTree(null); // 재렌더 + 화면 맞춤
+}
+
+// ── 13. 트리 초기화 ──────────────────────────────────────────
 function resetTree() {
     nodeMap  = {};
     edgeList = [];
