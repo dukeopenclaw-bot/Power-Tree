@@ -147,17 +147,21 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 }
 
 .sidebar-header {
-  padding: 16px;
+  padding: 10px 12px 10px 16px;
   border-bottom: 1px solid var(--sidebar-border);
   background: #f8f9fa;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
+
+.sidebar-title { flex: 1; min-width: 0; }
 
 .sidebar-header h1 {
   font-size: 16px;
   font-weight: 700;
   color: #333;
-							
-					   
   display: flex;
   align-items: center;
   gap: 8px;
@@ -174,6 +178,50 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
   color: var(--text-dim);
   margin-top: 2px;
 }
+
+#btn-reset {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  background: none;
+  border: 1px solid #e57373;
+  border-radius: 5px;
+  color: #e57373;
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+#btn-reset:hover { background: #ffebee; border-color: #c62828; color: #c62828; }
+
+/* 사이드바 너비 조절 핸들 */
+#sidebar-resize {
+  width: 5px;
+  flex-shrink: 0;
+  cursor: col-resize;
+  background: transparent;
+  position: relative;
+  z-index: 15;
+  transition: background 0.2s;
+}
+#sidebar-resize::after {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 0;
+  width: 1px;
+  height: 100%;
+  background: transparent;
+  transition: background 0.2s;
+}
+#sidebar-resize:hover::after,
+#sidebar-resize.active::after {
+  background: var(--accent, #0d6efd);
+}
+#sidebar.collapsed + #sidebar-resize { display: none; }
+#sidebar.resizing { transition: none !important; }
 
 .search-box { padding: 14px; }
 
@@ -353,8 +401,6 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 											  
 }
 #toolbar button:hover { border-color: var(--accent); color: var(--accent); transform: translateY(-2px); }
-#btn-reset { border-color: #e57373; color: #e57373; }
-#btn-reset:hover { border-color: #c62828; color: #c62828; }
 /* toolbar 내 열 컨트롤 */
 .toolbar-sep {
   width: 1px; height: 24px;
@@ -552,10 +598,12 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 /* ─── Mobile (모바일 최적화) ─── */
 @media (max-width: 600px) {
   /* 사이드바 너비를 줄여서 트리 화면 확보 */
-  #sidebar { 
-    width: 180px; 
+  #sidebar {
+    width: 180px;
     min-width: 150px;
   }
+  /* 모바일: 핸들 숨김 (터치 드래그 미지원) */
+  #sidebar-resize { display: none; }
   
   /* 화면이 좁은 모바일에서는 범례(Legend)를 숨겨 시야 방해 제거 */
   #legend { 

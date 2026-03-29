@@ -28,8 +28,11 @@
     <!-- 축소 시 숨겨지는 영역 -->
     <div class="sidebar-inner">
       <div class="sidebar-header">
-        <h1>Power Tree</h1>
-        <span class="version">V3.7</span>
+        <div class="sidebar-title">
+          <h1>Power Tree</h1>
+          <span class="version">V3.8</span>
+        </div>
+        <button id="btn-reset" onclick="resetTree()" title="초기화">↺</button>
       </div>
 
       <div class="search-box">
@@ -47,6 +50,9 @@
       <div id="status"></div>
     </div>
   </aside>
+
+  <!-- 사이드바 너비 조절 핸들 -->
+  <div id="sidebar-resize"></div>
 
   <!-- ── 우측 캔버스 ── -->
   <main id="canvas-container">
@@ -78,7 +84,6 @@
       <button title="줌 아웃" onclick="zoomOut()">－</button>
       <button title="화면 맞춤" onclick="zoomFit()">⊙</button>
       <button title="자동 정렬" onclick="autoLayout()" id="btn-layout">⊞</button>
-      <button title="초기화" onclick="resetTree()" id="btn-reset">↺</button>
       <span class="toolbar-sep"></span>
       <span class="col-label">열</span>
       <button title="열 줄이기" onclick="changeColCount(-2)">▼</button>
@@ -158,12 +163,47 @@
       if (!resizeTimer) {
         resizeTimer = setTimeout(() => {
           resizeTimer = null;
-          // drawTree 대신 zoomFit만 → 기존 노드 전체 유지
           if (typeof zoomFit === "function") zoomFit();
         }, 200);
       }
     });
     observer.observe(container);
+  })();
+
+  // ── 사이드바 너비 드래그 조절 ────────────────────────
+  (function () {
+    const sb     = document.getElementById("sidebar");
+    const handle = document.getElementById("sidebar-resize");
+    let dragging = false, startX = 0, startW = 0;
+
+    handle.addEventListener("mousedown", e => {
+      if (sb.classList.contains("collapsed")) return;
+      dragging = true;
+      startX   = e.clientX;
+      startW   = sb.offsetWidth;
+      sb.classList.add("resizing");
+      handle.classList.add("active");
+      document.body.style.cursor     = "col-resize";
+      document.body.style.userSelect = "none";
+      e.preventDefault();
+    });
+
+    document.addEventListener("mousemove", e => {
+      if (!dragging) return;
+      const newW = Math.max(180, Math.min(560, startW + e.clientX - startX));
+      sb.style.width    = newW + "px";
+      sb.style.minWidth = newW + "px";
+    });
+
+    document.addEventListener("mouseup", () => {
+      if (!dragging) return;
+      dragging = false;
+      sb.classList.remove("resizing");
+      handle.classList.remove("active");
+      document.body.style.cursor     = "";
+      document.body.style.userSelect = "";
+      if (typeof zoomFit === "function") zoomFit();
+    });
   })();
 </script>
 
