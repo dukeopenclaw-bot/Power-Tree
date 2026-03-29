@@ -1,4 +1,4 @@
-const CACHE_NAME = 'power-tree-v20';
+const CACHE_NAME = 'power-tree-v21';
 const STATIC_ASSETS = [
   './index.html',
   './style.css',
