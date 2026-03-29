@@ -313,7 +313,7 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 #col-ctrl {
   position: absolute;
   bottom: 20px;
-  right: 160px;
+  left: 20px;
   display: flex;
   align-items: center;
   gap: 4px;

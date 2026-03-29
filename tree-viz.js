@@ -443,58 +443,58 @@ function changeColCount(delta) {
     if (tgt) drawTree(tgt);
 }
 
-// ── 11. 트리에 태그 추가 (기존 트리 유지) ──────────────────────
-function addTagToTree(tag) {
-    const base = getBaseName(tag);
-    // 이미 있으면 팝업만 표시
-    if (nodeMap[base]) { showNodeInfo(base); return; }
+// ── 11. 트리에 태그 일괄 추가 (6열 그리드 배치) ─────────────────
+const BATCH_COLS = 6;
 
-    // 트리가 비어있으면 새로 시작
-    if (Object.keys(nodeMap).length === 0) {
-        drawTree(base);
+function addTagsBatch(tags) {
+    const bases = tags.map(getBaseName).filter(b => b && !nodeMap[b]);
+    if (bases.length === 0) return;
+
+    // 트리가 비어있고 1개면 drawTree로 full 트리 표시
+    if (Object.keys(nodeMap).length === 0 && bases.length === 1) {
+        drawTree(bases[0]);
         return;
     }
 
-    // 기존 노드 bounding box 계산 → 오른쪽 아래에 배치
-    const nodes = Object.values(nodeMap);
-    const maxY  = Math.max(...nodes.map(n => n.y));
-    const avgX  = nodes.reduce((s, n) => s + n.x, 0) / nodes.length;
+    // 기존 노드 아래에 6열 그리드로 배치
+    const existing = Object.values(nodeMap);
+    const baseY = existing.length ? Math.max(...existing.map(n => n.y)) + V_GAP * 1.5 : 300;
+    const centerX = existing.length
+        ? existing.reduce((s, n) => s + n.x, 0) / existing.length
+        : 500;
 
-    const fromRows = powerData.filter(d => getBaseName(d["Equipment Tag(To)"])   === base);
-    const toRows   = powerData.filter(d => getBaseName(d["Equipment Tag(From)"]) === base);
+    const cellW = Math.max(...bases.map(nodeWidth)) + H_GAP;
+    const cellH = NODE_H + 16;
 
-    const newFrom = [...new Set(fromRows.map(d => getBaseName(d["Equipment Tag(From)"])))]
-        .filter(t => t && t !== base && !nodeMap[t]);
-    const newTo   = [...new Set(toRows.map(d => getBaseName(d["Equipment Tag(To)"])))]
-        .filter(t => t && t !== base && !nodeMap[t]);
-
-    const allNew = [base, ...newFrom, ...newTo];
-    const STEP   = Math.max(...allNew.map(nodeWidth)) + H_GAP;
-
-    const cx = avgX;
-    const cy = maxY + V_GAP * 2;
-
-    nodeMap[base] = { x: cx, y: cy, type: "center", w: nodeWidth(base), expanded: true };
-
-    newFrom.forEach((t, i) => {
-        const total = newFrom.length;
-        nodeMap[t] = { x: cx + (i - (total-1)/2)*STEP, y: cy - V_GAP, type: "from", w: nodeWidth(t), expanded: false };
-    });
-    newTo.forEach((t, i) => {
-        const row = Math.floor(i / colCount), col = i % colCount;
-        const rowCount = Math.min(newTo.length - row * colCount, colCount);
-        nodeMap[t] = {
-            x: cx - ((rowCount-1)*STEP)/2 + col*STEP,
-            y: cy + V_GAP + row*(NODE_H + V_GAP*0.6),
-            type: "to", w: nodeWidth(t), expanded: false
+    bases.forEach((base, i) => {
+        const row = Math.floor(i / BATCH_COLS);
+        const col = i % BATCH_COLS;
+        const totalInRow = Math.min(bases.length - row * BATCH_COLS, BATCH_COLS);
+        const rowStartX = centerX - ((totalInRow - 1) * cellW) / 2;
+        nodeMap[base] = {
+            x: rowStartX + col * cellW,
+            y: baseY + row * cellH,
+            type: "center",
+            w: nodeWidth(base),
+            expanded: false
         };
     });
 
-    _collectEdges([...fromRows, ...toRows], base);
+    // 각 태그의 엣지 수집 (기존 노드와 연결되는 것만 표시됨)
+    bases.forEach(base => {
+        const fr = powerData.filter(d => getBaseName(d["Equipment Tag(To)"])   === base);
+        const tr = powerData.filter(d => getBaseName(d["Equipment Tag(From)"]) === base);
+        _collectEdges([...fr, ...tr], base);
+    });
 
     const svg = d3.select("#tree-svg");
     const cur = svgZoom ? d3.zoomTransform(svg.node()) : null;
     renderTree(cur);
+}
+
+// ── 11b. 단일 태그 추가 (기존 트리 유지, from/to 포함) ────────
+function addTagToTree(tag) {
+    addTagsBatch([tag]);
 }
 
 // ── 12. 트리 초기화 ──────────────────────────────────────────

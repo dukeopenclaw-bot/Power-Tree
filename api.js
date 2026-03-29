@@ -156,9 +156,7 @@ function addSelected() {
   collapseSidebar();
   const tags = [...selectedTags];
   selectedTags.clear();
-  setTimeout(() => {
-    tags.forEach(tag => addTagToTree(tag));
-  }, 280);
+  setTimeout(() => addTagsBatch(tags), 280);
 }
 
 // ── 사이드바 제어 ─────────────────────────────────────
