@@ -101,10 +101,27 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
   overflow: hidden;
 }
 #sidebar.collapsed {
-  width: 44px;
-  min-width: 44px;
+  width: 0;
+  min-width: 0;
+  border-right: none;
+  box-shadow: none;
+  overflow: visible;
 }
 #sidebar.collapsed .sidebar-inner { display: none; }
+/* 축소시 토글 버튼만 캔버스 위에 플로팅 아이콘으로 표시 */
+#sidebar.collapsed #sidebar-toggle {
+  position: fixed;
+  left: 0;
+  top: 10px;
+  z-index: 50;
+  width: 36px;
+  height: 36px;
+  border-radius: 0 8px 8px 0;
+  border: 1px solid var(--sidebar-border);
+  border-left: none;
+  background: rgba(255,255,255,0.93);
+  box-shadow: 2px 0 8px rgba(0,0,0,0.18);
+}
 
 #sidebar-toggle {
   flex-shrink: 0;
@@ -189,19 +206,54 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 #resultList::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 3px; }
 
 #resultList li {
-  padding: 12px 16px;
+  padding: 10px 14px;
   font-size: 13px;
   border-bottom: 1px solid #eee;
   cursor: pointer;
   transition: background 0.1s;
-				   
 }
 
-																	  
-
 #resultList li:hover { background: var(--result-hover); }
+#resultList li.selected { background: #e8f0fe; }
 #resultList li .tag { font-weight: 600; color: #000; display: block; margin-bottom: 2px; }
 #resultList li .desc { color: var(--text-dim); font-size: 12px; }
+
+/* 검색결과 체크박스 */
+.result-item { display: flex; align-items: flex-start; gap: 8px; }
+.result-item .result-cb { margin-top: 2px; flex-shrink: 0; cursor: pointer; }
+.result-item .tag, .result-item .desc { display: block; }
+.search-hint {
+  display: inline-block;
+  font-size: 10px;
+  background: #e8f0fe;
+  color: #3c6bc4;
+  border-radius: 3px;
+  padding: 1px 5px;
+  margin-left: 4px;
+  vertical-align: middle;
+}
+
+/* 선택 추가 버튼 행 */
+.add-row {
+  padding: 8px 14px !important;
+  background: var(--bg-card, #fafafa) !important;
+  border-top: 1px solid var(--border, #ddd) !important;
+  cursor: default !important;
+}
+.add-row:hover { background: var(--bg-card, #fafafa) !important; }
+#add-sel-btn {
+  width: 100%;
+  padding: 7px;
+  background: var(--accent, #007bff);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  font-weight: 600;
+}
+#add-sel-btn:disabled { background: #aaa; cursor: default; }
+#add-sel-btn:not(:disabled):hover { background: #0056c7; }
 
 /* ─── Status bar ─── */
 #status {
@@ -275,47 +327,6 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 #hint p { font-size: 14px; line-height: 1.6; }
 
 /* ─── 열 수 조절 ─── */
-#col-ctrl {
-  position: absolute;
-  bottom: 20px;
-  right: 160px;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  background: #fff;
-  border: 1px solid #ced4da;
-  border-radius: 4px;
-  padding: 0 8px;
-  height: 40px;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-  z-index: 20;
-}
-.col-label {
-  font-size: 12px;
-  color: #666;
-  margin-right: 2px;
-}
-#col-count {
-  font-size: 14px;
-  font-weight: 600;
-  min-width: 20px;
-  text-align: center;
-  color: #333;
-}
-#col-ctrl button {
-  width: 22px;
-  height: 26px;
-  background: #f8f9fa;
-  border: 1px solid #dee2e6;
-  border-radius: 3px;
-  font-size: 10px;
-  cursor: pointer;
-  color: #333;
-  padding: 0;
-  line-height: 1;
-}
-#col-ctrl button:hover { background: var(--accent-dim); border-color: var(--accent); }
-
 /* ─── Toolbar ─── */
 #toolbar {
   position: absolute;
@@ -342,6 +353,40 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 											  
 }
 #toolbar button:hover { border-color: var(--accent); color: var(--accent); transform: translateY(-2px); }
+#btn-reset { border-color: #e57373; color: #e57373; }
+#btn-reset:hover { border-color: #c62828; color: #c62828; }
+/* toolbar 내 열 컨트롤 */
+.toolbar-sep {
+  width: 1px; height: 24px;
+  background: #ced4da;
+  align-self: center;
+}
+#toolbar .col-label {
+  font-size: 12px; color: #666;
+  align-self: center;
+}
+#toolbar #col-count {
+  min-width: 20px; text-align: center;
+  font-size: 14px; font-weight: 600;
+  color: #333; align-self: center;
+}
+/* top-row: 전체선택 + 선택추가 */
+.top-row {
+  display: flex !important;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px !important;
+  background: var(--bg-card, #fafafa) !important;
+  border-bottom: 1px solid var(--border, #ddd) !important;
+  cursor: default !important;
+  gap: 8px;
+}
+.top-row:hover { background: var(--bg-card, #fafafa) !important; }
+.select-all-label {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 13px; color: var(--text, #333);
+  cursor: pointer; white-space: nowrap;
+}
 
 /* ─── SVG Node Styles ─── */
 
@@ -443,6 +488,66 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 #legend .leg-from   { background: var(--node-from);   border-color: var(--node-stroke-from); }
 #legend .leg-to     { background: var(--node-to);     border-color: var(--node-stroke-to); }
 #legend .leg-mutual { background: #fce4ec;             border-color: #e91e63; }
+
+/* ─── 노드 선택 강조 ─── */
+.node.node-selected rect {
+  stroke-width: 3px;
+  filter: drop-shadow(0 0 6px rgba(0,0,0,0.4));
+}
+
+/* ─── 노드 정보 툴팁 ─── */
+.node-tooltip {
+  position: fixed;
+  z-index: 1000;
+  background: var(--bg-card, #fff);
+  border-radius: 8px;
+  box-shadow: 0 6px 24px rgba(0,0,0,0.18);
+  min-width: 220px;
+  max-width: 320px;
+  max-height: 70vh;
+  overflow-y: auto;
+  pointer-events: auto;
+  border: 1px solid var(--border, #ddd);
+}
+.tooltip-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px 8px;
+  border-bottom: 1px solid var(--border, #ddd);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text, #333);
+}
+.tooltip-close {
+  background: none;
+  border: none;
+  font-size: 15px;
+  cursor: pointer;
+  color: var(--text-dim, #888);
+  line-height: 1;
+  padding: 2px 5px;
+}
+.tooltip-close:hover { color: var(--text, #333); }
+.info-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.info-table th, .info-table td {
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border, #eee);
+  text-align: left;
+  vertical-align: top;
+}
+.info-table th {
+  color: var(--text-dim, #888);
+  font-weight: 600;
+  width: 36%;
+  white-space: nowrap;
+}
+.info-table td { color: var(--text, #333); word-break: break-all; }
+.info-table .extra-row { color: var(--text-dim, #888); font-size: 12px; }
 
 /* ─── Mobile (모바일 최적화) ─── */
 @media (max-width: 600px) {

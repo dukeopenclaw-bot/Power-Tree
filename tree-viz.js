@@ -12,12 +12,13 @@ const CHAR_W  = 7.8;
 const PAD_X   = 18;
 
 // ── 전역 상태 ─────────────────────────────────────────────────
-let nodeMap   = {};
-let edgeList  = [];
-let tgt       = "";   // 베이스 태그 (EDB-001 → EDB)
-let colCount  = 4;
-let svgZoom   = null;
-let _dragging = false;
+let nodeMap          = {};
+let edgeList         = [];
+let tgt              = "";   // 베이스 태그 (EDB-001 → EDB)
+let colCount         = 4;
+let svgZoom          = null;
+let _dragging        = false;
+let _tooltipHideTimer = null;
 
 // ── 유틸 ─────────────────────────────────────────────────────
 function nodeWidth(tag) {
@@ -293,15 +294,17 @@ function renderTree(preservedTransform) {
     } else {
         requestAnimationFrame(() => {
             try {
-                // 사이드바 축소 후 변경된 캔버스 크기를 새로 읽음
+                // 사이드바 축소 후 변경된 캔버스 크기를 새로 읽음 (zoomFit 방식)
                 const c  = document.getElementById("canvas-container");
                 const cW = c.clientWidth  || 800;
                 const cH = c.clientHeight || 600;
                 const bbox = g.node().getBBox();
                 if (!bbox.width || !bbox.height) return;
-                const tx = cW / 2 - (bbox.x + bbox.width  / 2);
-                const ty = cH / 2 - (bbox.y + bbox.height / 2);
-                svg.call(svgZoom.transform, d3.zoomIdentity.translate(tx, ty));
+                const scale = Math.min(0.9 * cW / bbox.width, 0.9 * cH / bbox.height, 1.5);
+                const tx = cW / 2 - scale * (bbox.x + bbox.width  / 2);
+                const ty = cH / 2 - scale * (bbox.y + bbox.height / 2);
+                svg.transition().duration(300)
+                    .call(svgZoom.transform, d3.zoomIdentity.translate(tx, ty).scale(scale));
             } catch (e) { /* 무시 */ }
         });
     }
@@ -387,47 +390,57 @@ function toggleNodeLabels(tag) {
     if (!anyVisible) target.style("display", null);
 }
 
+// PC 환경 감지 (hover 가능한 포인터 장치)
+const _hasHover = window.matchMedia("(hover: hover) and (pointer: fine)").matches;
+
 // ── 8. 인터랙션 ───────────────────────────────────────────────
 function _setupInteractions(sel, tag) {
-    let clickTimer = null;
     let pressTimer = null;
     let longFired  = false;
 
-    sel.on("click.interact", (event) => {
-        event.stopPropagation();
-        if (_dragging) return;
-        if (clickTimer) {
-            clearTimeout(clickTimer);
-            clickTimer = null;
-            expandNode(tag);
-        } else {
-            clickTimer = setTimeout(() => {
-                clickTimer = null;
-                toggleNodeLabels(tag);
-            }, 260);
-        }
-    });
-
-    sel.on("touchstart.interact", () => {
-        longFired = false;
-        pressTimer = setTimeout(() => {
-            longFired = true;
-            pressTimer = null;
-            expandNode(tag);
-        }, 600);
-    })
-    .on("touchend.interact", (event) => {
-        if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
-        if (!longFired) {
-            event.preventDefault();
-            toggleNodeLabels(tag);
-        }
-        longFired = false;
-    })
-    .on("touchcancel.interact", () => {
-        if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
-        longFired = false;
-    });
+    if (_hasHover) {
+        // ── PC: 호버 → 정보 툴팁, 클릭 → 선택장비 지정 ─────────
+        sel.on("mouseenter.interact", (event) => {
+            if (_tooltipHideTimer) { clearTimeout(_tooltipHideTimer); _tooltipHideTimer = null; }
+            if (!_dragging) showNodeInfo(tag, event.clientX, event.clientY);
+        })
+        .on("mousemove.interact", (event) => {
+            _positionTooltip(event.clientX, event.clientY);
+        })
+        .on("mouseleave.interact", () => {
+            _tooltipHideTimer = setTimeout(() => {
+                _tooltipHideTimer = null;
+                closeNodeModal();
+            }, 120);
+        })
+        .on("click.interact", (event) => {
+            event.stopPropagation();
+            if (_dragging) return;
+            setAsCenter(tag);
+        });
+    } else {
+        // ── 모바일: 탭 → 정보 표시, 길게 터치 → 선택장비 지정 ───
+        sel.on("touchstart.interact", () => {
+            longFired = false;
+            pressTimer = setTimeout(() => {
+                longFired = true;
+                pressTimer = null;
+                setAsCenter(tag);
+            }, 600);
+        })
+        .on("touchend.interact", (event) => {
+            if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
+            if (!longFired) {
+                event.preventDefault();
+                showNodeInfo(tag);
+            }
+            longFired = false;
+        })
+        .on("touchcancel.interact", () => {
+            if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
+            longFired = false;
+        });
+    }
 }
 
 // ── 9. 열 수 조절 ────────────────────────────────────────────
@@ -437,4 +450,277 @@ function changeColCount(delta) {
     colCount = next;
     document.getElementById("col-count").textContent = colCount;
     if (tgt) drawTree(tgt);
+}
+
+// ── 11. 트리에 태그 일괄 추가 (6열 그리드 배치) ─────────────────
+const BATCH_COLS = 6;
+
+function addTagsBatch(tags) {
+    const bases = tags.map(getBaseName).filter(b => b && !nodeMap[b]);
+    if (bases.length === 0) return;
+
+    // 단일 태그: 항상 full 트리로 (from/to 포함)
+    if (bases.length === 1) {
+        if (Object.keys(nodeMap).length === 0) {
+            drawTree(bases[0]);
+        } else {
+            _addSingleWithConnections(bases[0]);
+        }
+        return;
+    }
+
+    // 기존 노드 아래에 6열 그리드로 배치
+    const existing = Object.values(nodeMap);
+    const baseY = existing.length ? Math.max(...existing.map(n => n.y)) + V_GAP * 1.5 : 300;
+    const centerX = existing.length
+        ? existing.reduce((s, n) => s + n.x, 0) / existing.length
+        : 500;
+
+    const cellW = Math.max(...bases.map(nodeWidth)) + H_GAP;
+    const cellH = NODE_H + 16;
+
+    bases.forEach((base, i) => {
+        const row = Math.floor(i / BATCH_COLS);
+        const col = i % BATCH_COLS;
+        const totalInRow = Math.min(bases.length - row * BATCH_COLS, BATCH_COLS);
+        const rowStartX = centerX - ((totalInRow - 1) * cellW) / 2;
+        nodeMap[base] = {
+            x: rowStartX + col * cellW,
+            y: baseY + row * cellH,
+            type: "center",
+            w: nodeWidth(base),
+            expanded: false
+        };
+    });
+
+    // 각 태그의 엣지 수집 (기존 노드와 연결되는 것만 표시됨)
+    bases.forEach(base => {
+        const fr = powerData.filter(d => getBaseName(d["Equipment Tag(To)"])   === base);
+        const tr = powerData.filter(d => getBaseName(d["Equipment Tag(From)"]) === base);
+        _collectEdges([...fr, ...tr], base);
+    });
+
+    const svg = d3.select("#tree-svg");
+    const cur = svgZoom ? d3.zoomTransform(svg.node()) : null;
+    renderTree(cur);
+}
+
+// ── 11b. 단일 태그를 기존 트리 아래에 from/to 포함해서 추가 ───
+function _addSingleWithConnections(base) {
+    if (nodeMap[base]) { showNodeInfo(base); return; }
+
+    const existing = Object.values(nodeMap);
+    const maxY  = Math.max(...existing.map(n => n.y));
+    const avgX  = existing.reduce((s, n) => s + n.x, 0) / existing.length;
+    const cx    = avgX;
+    const cy    = maxY + V_GAP * 2;
+
+    const fromRows = powerData.filter(d => getBaseName(d["Equipment Tag(To)"])   === base);
+    const toRows   = powerData.filter(d => getBaseName(d["Equipment Tag(From)"]) === base);
+    const fromTags = [...new Set(fromRows.map(d => getBaseName(d["Equipment Tag(From)"])))]
+        .filter(t => t && t !== base && !nodeMap[t]);
+    const toTags   = [...new Set(toRows.map(d => getBaseName(d["Equipment Tag(To)"])))]
+        .filter(t => t && t !== base && !nodeMap[t]);
+
+    const mutualSet = new Set(fromTags.filter(t => toTags.includes(t)));
+    const onlyFrom  = fromTags.filter(t => !mutualSet.has(t));
+    const mutuals   = [...mutualSet];
+    const STEP = Math.max(...[base, ...fromTags].map(nodeWidth)) + H_GAP;
+
+    // 초기 표시: 공급원(from) + 상호 노드만. 부하(to)는 클릭으로 확장.
+    nodeMap[base] = { x: cx, y: cy, type: "center", w: nodeWidth(base), expanded: false };
+    mutuals.forEach((t, i) => {
+        nodeMap[t] = { x: cx + (i+1)*STEP, y: cy, type: "mutual", w: nodeWidth(t), expanded: false };
+    });
+    onlyFrom.forEach((t, i) => {
+        const total = onlyFrom.length;
+        nodeMap[t] = { x: cx + (i-(total-1)/2)*STEP, y: cy - V_GAP, type: "from", w: nodeWidth(t), expanded: false };
+    });
+    _collectEdges(fromRows, base);
+
+    const svg = d3.select("#tree-svg");
+    const cur = svgZoom ? d3.zoomTransform(svg.node()) : null;
+    renderTree(cur);
+}
+
+function addTagToTree(tag) {
+    addTagsBatch([tag]);
+}
+
+// ── 11c. 선택장비 지정 (기존 노드 유지, tgt + 타입만 변경) ──────
+function setAsCenter(tag) {
+    if (!nodeMap[tag]) return;
+
+    // 이전 center → from 타입으로 DOM 직접 변경 (re-render 없이)
+    if (tgt && nodeMap[tgt] && tgt !== tag) {
+        nodeMap[tgt].type = "from";
+        d3.selectAll(".node")
+            .filter(function() { return d3.select(this).attr("data-tag") === tgt; })
+            .attr("class", "node node-from");
+    }
+
+    // 새 center 지정
+    tgt = tag;
+    nodeMap[tag].type = "center";
+    d3.selectAll(".node")
+        .filter(function() { return d3.select(this).attr("data-tag") === tag; })
+        .attr("class", "node node-center");
+
+    // 미확장 상태면 연결 노드(from/to) 펼치기
+    if (!nodeMap[tag].expanded) {
+        expandNode(tag); // 내부에서 renderTree 호출
+    }
+}
+
+// ── 12. 트리 초기화 ──────────────────────────────────────────
+function resetTree() {
+    nodeMap  = {};
+    edgeList = [];
+    tgt      = "";
+    svgZoom  = null;
+    d3.select("#tree-svg").selectAll("*").remove();
+    const hint = document.getElementById("hint");
+    if (hint) hint.classList.remove("hidden");
+    closeNodeModal();
+    // 검색창 초기화 + 사이드바 열기
+    const si = document.getElementById("searchInput");
+    if (si) si.value = "";
+    const rl = document.getElementById("resultList");
+    if (rl) rl.innerHTML = "";
+    if (typeof selectedTags !== "undefined") selectedTags.clear();
+    const sb = document.getElementById("sidebar");
+    if (sb) sb.classList.remove("collapsed");
+}
+
+// ── 10. 노드 정보 툴팁 ───────────────────────────────────────
+function _positionTooltip(cx, cy) {
+    const el = document.getElementById("node-tooltip");
+    if (!el) return;
+    const W = window.innerWidth, H = window.innerHeight;
+    const tw = el.offsetWidth  || 280;
+    const th = el.offsetHeight || 200;
+    let x = cx + 18;
+    let y = cy - 10;
+    if (x + tw > W - 12) x = cx - tw - 18;
+    if (y + th > H - 12) y = H - th - 12;
+    if (y < 8) y = 8;
+    el.style.left = x + "px";
+    el.style.top  = y + "px";
+}
+
+// 툴팁 hover 유지 (초기화 1회)
+document.addEventListener("DOMContentLoaded", () => {
+    const el = document.getElementById("node-tooltip");
+    if (!el) return;
+    el.addEventListener("mouseenter", () => {
+        if (_tooltipHideTimer) { clearTimeout(_tooltipHideTimer); _tooltipHideTimer = null; }
+    });
+    el.addEventListener("mouseleave", () => { closeNodeModal(); });
+});
+
+function showNodeInfo(tag, clientX, clientY) {
+    const node = nodeMap[tag];
+    if (!node) return;
+
+    // 해당 태그가 포함된 모든 행 수집
+    const rows = powerData.filter(d =>
+        getBaseName(d["Equipment Tag(From)"]) === tag ||
+        getBaseName(d["Equipment Tag(To)"])   === tag
+    );
+
+    // Description 추출 (From 또는 To 쪽에서)
+    let desc = "";
+    for (const r of rows) {
+        if (getBaseName(r["Equipment Tag(From)"]) === tag && r["Description(From)"]) {
+            desc = r["Description(From)"]; break;
+        }
+        if (getBaseName(r["Equipment Tag(To)"]) === tag && r["Description(To)"]) {
+            desc = r["Description(To)"]; break;
+        }
+        if (r["Description"]) { desc = r["Description"]; break; }
+    }
+
+    // 공급원 (From) 목록
+    const fromList = [...new Set(
+        rows.filter(r => getBaseName(r["Equipment Tag(To)"]) === tag)
+            .map(r => r["Equipment Tag(From)"])
+            .filter(Boolean)
+    )];
+
+    // 부하 (To) 목록
+    const toList = [...new Set(
+        rows.filter(r => getBaseName(r["Equipment Tag(From)"]) === tag)
+            .map(r => r["Equipment Tag(To)"])
+            .filter(Boolean)
+    )];
+
+    // CKT 목록 (중복 제거)
+    const cktFromList = [...new Set(rows.map(r => r["CKT(From)"]).filter(Boolean))];
+    const cktToList   = [...new Set(rows.map(r => r["CKT(To)"]).filter(Boolean))];
+
+    // 위치 정보
+    const pos = `X: ${Math.round(node.x)},  Y: ${Math.round(node.y)}`;
+
+    // 추가 컬럼 키 수집 (위의 것 제외한 나머지)
+    const knownKeys = new Set([
+        "Equipment Tag(From)", "Equipment Tag(To)",
+        "Description(From)", "Description(To)", "Description",
+        "CKT(From)", "CKT(To)"
+    ]);
+    const extraKeys = rows.length > 0
+        ? Object.keys(rows[0]).filter(k => !knownKeys.has(k))
+        : [];
+    const extraRows = [...new Set(
+        rows.flatMap(r => extraKeys.map(k => r[k] ? `${k}: ${r[k]}` : "").filter(Boolean))
+    )];
+
+    // 모달 내용 구성
+    const row = (label, val) => val
+        ? `<tr><th>${label}</th><td>${val}</td></tr>` : "";
+    const listRow = (label, arr) => arr.length
+        ? `<tr><th>${label}</th><td>${arr.join("<br>")}</td></tr>` : "";
+
+    document.getElementById("modal-tag").textContent = tag;
+    document.getElementById("modal-body").innerHTML = `
+        <table class="info-table">
+          <tbody>
+            ${row("설명", desc)}
+            ${row("타입", node.type === "center" ? "선택 장비" :
+                          node.type === "from"   ? "공급원" :
+                          node.type === "mutual" ? "상호 공급" : "부하")}
+            ${listRow("공급원 (From)", fromList)}
+            ${listRow("CKT (From)", cktFromList)}
+            ${listRow("부하 (To)", toList)}
+            ${listRow("CKT (To)", cktToList)}
+            ${extraRows.map(s => `<tr><td colspan="2" class="extra-row">${s}</td></tr>`).join("")}
+            ${row("화면 좌표", pos)}
+          </tbody>
+        </table>`;
+
+    // 선택 강조
+    d3.selectAll(".node").classed("node-selected", false);
+    d3.selectAll(".node").filter(function () {
+        return d3.select(this).attr("data-tag") === tag;
+    }).classed("node-selected", true);
+
+    const el = document.getElementById("node-tooltip");
+    // 먼저 초기 위치 설정 후 표시 (위치 없이 block하면 좌상단에 순간 깜빡임)
+    if (clientX !== undefined) {
+        el.style.left = (clientX + 18) + "px";
+        el.style.top  = (Math.max(8, clientY - 10)) + "px";
+    } else {
+        el.style.left = (window.innerWidth / 2 + 20) + "px";
+        el.style.top  = "80px";
+    }
+    el.style.display = "block";
+    // 렌더 후 뷰포트 넘침 보정
+    if (clientX !== undefined) {
+        requestAnimationFrame(() => _positionTooltip(clientX, clientY));
+    }
+}
+
+function closeNodeModal() {
+    const el = document.getElementById("node-tooltip");
+    if (el) el.style.display = "none";
+    d3.selectAll(".node").classed("node-selected", false);
 }
