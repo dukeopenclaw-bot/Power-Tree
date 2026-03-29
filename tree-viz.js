@@ -20,6 +20,12 @@ let svgZoom          = null;
 let _dragging        = false;
 let _tooltipHideTimer = null;
 
+// ── 모바일 탭/롱프레스 전역 상태 ───────────────────────────────
+let _mobilePressTimer   = null;
+let _mobileLongFired    = false;
+let _mobileLastTapTag   = null;
+let _mobileLastTapTime  = 0;
+
 // ── 유틸 ─────────────────────────────────────────────────────
 function nodeWidth(tag) {
     return Math.max(70, Math.ceil(tag.length * CHAR_W) + PAD_X * 2);
@@ -334,8 +340,25 @@ function _bezier(fn, tn) {
 }
 
 // ── 6. 드래그 ────────────────────────────────────────────────
-function _dragStart() { _dragging = false; d3.select(this).raise().classed("active", true); }
+function _dragStart() {
+    _dragging = false;
+    d3.select(this).raise().classed("active", true);
+
+    if (!_hasHover) {
+        // 모바일: 롱프레스 타이머 시작
+        const tag = d3.select(this).attr("data-tag");
+        _mobileLongFired = false;
+        if (_mobilePressTimer) clearTimeout(_mobilePressTimer);
+        _mobilePressTimer = setTimeout(() => {
+            _mobileLongFired = true;
+            _mobilePressTimer = null;
+            setAsCenter(tag); // 색상만 즉시 변경 (re-render 없음)
+        }, 600);
+    }
+}
 function _drag(event) {
+    // 드래그 움직임 감지 → 롱프레스 취소
+    if (_mobilePressTimer) { clearTimeout(_mobilePressTimer); _mobilePressTimer = null; }
     _dragging = true;
     const tag  = d3.select(this).attr("data-tag");
     const node = nodeMap[tag];
@@ -369,7 +392,30 @@ function _drag(event) {
     });
 }
 function _dragEnd() {
+    if (_mobilePressTimer) { clearTimeout(_mobilePressTimer); _mobilePressTimer = null; }
     d3.select(this).classed("active", false);
+
+    if (!_hasHover && !_dragging) {
+        const tag = d3.select(this).attr("data-tag");
+        if (_mobileLongFired) {
+            // 롱프레스 종료 → 확장
+            if (tag && nodeMap[tag] && !nodeMap[tag].expanded) expandNode(tag);
+        } else if (tag) {
+            // 탭 처리: 단일탭 → 툴팁, 더블탭 → 선택장비+확장
+            const now = Date.now();
+            if (tag === _mobileLastTapTag && now - _mobileLastTapTime < 350) {
+                setAsCenter(tag);
+                if (nodeMap[tag] && !nodeMap[tag].expanded) expandNode(tag);
+                _mobileLastTapTag  = null;
+                _mobileLastTapTime = 0;
+            } else {
+                showNodeInfo(tag);
+                _mobileLastTapTag  = tag;
+                _mobileLastTapTime = now;
+            }
+        }
+    }
+    _mobileLongFired = false;
     setTimeout(() => { _dragging = false; }, 50);
 }
 
@@ -395,10 +441,6 @@ const _hasHover = window.matchMedia("(hover: hover) and (pointer: fine)").matche
 
 // ── 8. 인터랙션 ───────────────────────────────────────────────
 function _setupInteractions(sel, tag) {
-    let pressTimer  = null;
-    let longFired   = false;
-    let lastTapTime = 0; // 모바일 더블탭 감지용
-
     if (_hasHover) {
         // ── PC: 호버 → 툴팁, 클릭 → 선택장비, 더블클릭 → 확장 ───
         sel.on("mouseenter.interact", () => {
@@ -414,45 +456,15 @@ function _setupInteractions(sel, tag) {
         .on("click.interact", (event) => {
             event.stopPropagation();
             if (_dragging) return;
-            setAsCenter(tag); // 색상만 변경, 확장 없음
+            setAsCenter(tag);
         })
         .on("dblclick.interact", (event) => {
             event.stopPropagation();
             setAsCenter(tag);
-            if (!nodeMap[tag].expanded) expandNode(tag); // 더블클릭 시 부하 확장
-        });
-    } else {
-        // ── 모바일: 탭 → 툴팁, 더블탭 → 확장, 길게 터치 → 선택장비 ─
-        sel.on("touchstart.interact", () => {
-            longFired = false;
-            pressTimer = setTimeout(() => {
-                longFired = true;
-                pressTimer = null;
-                setAsCenter(tag); // 길게 누르기 → 선택장비 (확장 없음)
-            }, 600);
-        })
-        .on("touchend.interact", (event) => {
-            if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
-            if (!longFired) {
-                event.preventDefault();
-                const now = Date.now();
-                if (now - lastTapTime < 300) {
-                    // 더블탭 → 확장
-                    setAsCenter(tag);
-                    if (!nodeMap[tag].expanded) expandNode(tag);
-                    lastTapTime = 0;
-                } else {
-                    showNodeInfo(tag); // 단일 탭 → 툴팁
-                    lastTapTime = now;
-                }
-            }
-            longFired = false;
-        })
-        .on("touchcancel.interact", () => {
-            if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
-            longFired = false;
+            if (!nodeMap[tag].expanded) expandNode(tag);
         });
     }
+    // 모바일: _dragStart/_drag/_dragEnd 에서 탭/더블탭/롱프레스 처리
 }
 
 // ── 9. 열 수 조절 ────────────────────────────────────────────
@@ -605,12 +617,12 @@ function setAsCenter(tag) {
     // expandNode는 더블클릭/더블탭에서만 호출 (단일 클릭 시 확장 안 함)
 }
 
-// ── 12. 자동 레이아웃 (루트별 세로 열 배치) ──────────────────
+// ── 12. 자동 레이아웃 (레벨별 짝수열 다단 그리드 배치) ──────────
 function autoLayout() {
     const tags = Object.keys(nodeMap);
     if (tags.length === 0) return;
 
-    const container = document.getElementById("canvas-container");
+    const container  = document.getElementById("canvas-container");
     const containerW = container.clientWidth || 800;
 
     // 방향 그래프 구축
@@ -633,62 +645,71 @@ function autoLayout() {
             const n = q.shift();
             if (seen.has(n)) continue;
             seen.add(n); comp.push(n);
-            ch[n].concat(pa[n]).forEach(x => { if (!seen.has(x)) q.push(x); });
+            [...ch[n], ...pa[n]].forEach(x => { if (!seen.has(x)) q.push(x); });
         }
         components.push(comp);
     });
 
-    const LEVEL_H = NODE_H + V_GAP;
-    const COL_GAP  = 60;  // 열 간격
-    const placed   = new Set();
+    const LEVEL_H  = NODE_H + V_GAP;
+    const COMP_GAP = 80;   // 컴포넌트 간격
     let globalX    = 0;
 
     components.forEach(comp => {
-        // 루트 노드 (컴포넌트 내에서 부모 없는 노드)
+        // 루트 노드 (컴포넌트 내 부모 없는 노드)
         const roots = comp.filter(t => !pa[t].some(p => comp.includes(p)));
-        (roots.length ? roots : [comp[0]]).forEach(root => {
-            if (placed.has(root)) return;
+        const startRoots = roots.length ? roots : [comp[0]];
 
-            // DFS 전위순회(pre-order) → 노드를 세로로 순서대로 쌓음
-            // 자식 1개 → 바로 아래, 여러 개 → 차례로 세로 배치
-            const order = [];
-            const stk = [root], dv = new Set();
-            while (stk.length) {
-                const n = stk.pop();
-                if (dv.has(n) || placed.has(n)) continue;
-                dv.add(n); order.push(n);
-                // 자식을 역순으로 push → pop 시 원래 순서대로 처리
-                [...ch[n]].filter(c => comp.includes(c)).reverse()
-                    .forEach(c => { if (!dv.has(c)) stk.push(c); });
-            }
+        // BFS로 각 노드의 레벨 할당
+        const level = {};
+        const bfsQ  = [...startRoots];
+        startRoots.forEach(r => { level[r] = 0; });
+        const visited = new Set(startRoots);
+        while (bfsQ.length) {
+            const n = bfsQ.shift();
+            ch[n].filter(c => comp.includes(c) && !visited.has(c)).forEach(c => {
+                visited.add(c);
+                level[c] = level[n] + 1;
+                bfsQ.push(c);
+            });
+        }
+        // 미방문 노드(사이클 등) → 레벨 0
+        comp.filter(t => level[t] === undefined).forEach(t => { level[t] = 0; });
 
-            // 열 너비 = 이 서브트리의 최대 노드 너비
-            const colW = Math.max(...order.map(nodeWidth));
-            const cx   = globalX + colW / 2;
+        // 레벨별 그룹화
+        const maxLevel = Math.max(...comp.map(t => level[t]));
+        const groups   = Array.from({ length: maxLevel + 1 }, () => []);
+        comp.forEach(t => groups[level[t]].push(t));
 
-            // 위에서부터 차례로 쌓기
-            order.forEach((t, i) => {
-                nodeMap[t].x = cx;
-                nodeMap[t].y = i * LEVEL_H;
-                placed.add(t);
+        // 컴포넌트 격자 열 수: colCount(짝수) 기준, 최대 해당 레벨 노드 수
+        const maxInLevel   = Math.max(...groups.map(g => g.length));
+        const compCols     = Math.min(maxInLevel, colCount);
+        const cellW        = Math.max(...comp.map(nodeWidth)) + H_GAP;
+        const compWidth    = compCols * cellW;
+
+        let yPos = 0;
+        groups.forEach(grp => {
+            const nCols = Math.min(grp.length, compCols);
+            const nRows = Math.ceil(grp.length / nCols);
+
+            grp.forEach((t, i) => {
+                const row  = Math.floor(i / nCols);
+                const col  = i % nCols;
+                const nodesInRow = Math.min(grp.length - row * nCols, nCols);
+                // 짧은 행은 컴포넌트 중앙 정렬
+                const leftPad = (compWidth - nodesInRow * cellW) / 2;
+                nodeMap[t].x = globalX + leftPad + col * cellW + cellW / 2;
+                nodeMap[t].y = yPos + row * LEVEL_H;
             });
 
-            globalX += colW + COL_GAP;
+            yPos += nRows * LEVEL_H;
         });
 
-        // 고립 노드 처리 (엣지 없음)
-        comp.filter(t => !placed.has(t)).forEach(t => {
-            const w = nodeWidth(t);
-            nodeMap[t].x = globalX + w / 2;
-            nodeMap[t].y = 0;
-            placed.add(t);
-            globalX += w + COL_GAP;
-        });
+        globalX += compWidth + COMP_GAP;
     });
 
-    // 전체 캔버스 중앙 정렬
-    const xs = tags.flatMap(t => [nodeMap[t].x - nodeMap[t].w / 2, nodeMap[t].x + nodeMap[t].w / 2]);
-    const offsetX = containerW / 2 - (Math.min(...xs) + Math.max(...xs)) / 2;
+    // 전체 캔버스 수평 중앙 정렬
+    const allX    = tags.flatMap(t => [nodeMap[t].x - nodeMap[t].w / 2, nodeMap[t].x + nodeMap[t].w / 2]);
+    const offsetX = containerW / 2 - (Math.min(...allX) + Math.max(...allX)) / 2;
     tags.forEach(t => { nodeMap[t].x += offsetX; nodeMap[t].y += 80; });
 
     renderTree(null);
@@ -716,31 +737,43 @@ function resetTree() {
 }
 
 // ── 10. 노드 정보 툴팁 ───────────────────────────────────────
-// 노드 바로 아래(SVG 좌표 → 화면 좌표 변환)에 툴팁 배치
+// 노드 DOM 요소의 실제 화면 좌표 기반으로 툴팁 배치 (줌/패닝 무관)
 function _positionTooltip(tag) {
     const el = document.getElementById("node-tooltip");
     if (!el || !nodeMap[tag]) return;
 
-    const svgEl  = document.getElementById("tree-svg");
-    const rect   = svgEl.getBoundingClientRect();
-    const tr     = svgZoom ? d3.zoomTransform(svgEl) : d3.zoomIdentity;
-    const node   = nodeMap[tag];
+    // 실제 DOM 요소 위치 사용 (zoom/transform 자동 반영)
+    const nodeEl = d3.selectAll("g.node").filter(function () {
+        return d3.select(this).attr("data-tag") === tag;
+    }).node();
 
-    // 노드 하단 중앙의 화면 좌표
-    const screenX = rect.left + tr.applyX(node.x);
-    const screenY = rect.top  + tr.applyY(node.y + NODE_H / 2 + 2);
+    let screenX, screenY, nodeH = NODE_H;
+    if (nodeEl) {
+        const r = nodeEl.getBoundingClientRect();
+        screenX = r.left + r.width  / 2;
+        screenY = r.bottom + 4;
+        nodeH   = r.height;
+    } else {
+        // fallback: SVG 좌표 변환
+        const svgEl = document.getElementById("tree-svg");
+        const rect  = svgEl.getBoundingClientRect();
+        const tr    = svgZoom ? d3.zoomTransform(svgEl) : d3.zoomIdentity;
+        const node  = nodeMap[tag];
+        screenX = rect.left + tr.applyX(node.x);
+        screenY = rect.top  + tr.applyY(node.y + NODE_H / 2 + 2);
+    }
 
     const W  = window.innerWidth, H = window.innerHeight;
     const tw = el.offsetWidth  || 280;
     const th = el.offsetHeight || 200;
 
     let x = screenX - tw / 2;
-    let y = screenY + 8;
+    let y = screenY + 4;
 
     // 뷰포트 넘침 보정
     if (x + tw > W - 8) x = W - tw - 8;
     if (x < 8) x = 8;
-    if (y + th > H - 8) y = screenY - NODE_H - th - 8; // 공간 없으면 위로
+    if (y + th > H - 8) y = screenY - nodeH - th - 8; // 공간 없으면 위로
     if (y < 8) y = 8;
 
     el.style.left = x + "px";
@@ -779,23 +812,34 @@ function showNodeInfo(tag) {
         if (r["Description"]) { desc = r["Description"]; break; }
     }
 
-    // 공급원 (From) 목록
+    // 공급원 (From) 목록 - 현재 화면에 표시된 노드만
     const fromList = [...new Set(
-        rows.filter(r => getBaseName(r["Equipment Tag(To)"]) === tag)
-            .map(r => r["Equipment Tag(From)"])
-            .filter(Boolean)
+        rows.filter(r => {
+            const f = getBaseName(r["Equipment Tag(From)"]);
+            return getBaseName(r["Equipment Tag(To)"]) === tag && nodeMap[f];
+        })
+        .map(r => getBaseName(r["Equipment Tag(From)"]))
+        .filter(Boolean)
     )];
 
-    // 부하 (To) 목록
+    // 부하 (To) 목록 - 현재 화면에 표시된 노드만
     const toList = [...new Set(
-        rows.filter(r => getBaseName(r["Equipment Tag(From)"]) === tag)
-            .map(r => r["Equipment Tag(To)"])
-            .filter(Boolean)
+        rows.filter(r => {
+            const t = getBaseName(r["Equipment Tag(To)"]);
+            return getBaseName(r["Equipment Tag(From)"]) === tag && nodeMap[t];
+        })
+        .map(r => getBaseName(r["Equipment Tag(To)"]))
+        .filter(Boolean)
     )];
 
-    // CKT 목록 (중복 제거)
-    const cktFromList = [...new Set(rows.map(r => r["CKT(From)"]).filter(Boolean))];
-    const cktToList   = [...new Set(rows.map(r => r["CKT(To)"]).filter(Boolean))];
+    // CKT(From) - 화면에 표시된 엣지(양쪽 노드 모두 nodeMap)의 것만
+    const _visibleRows = rows.filter(r => {
+        const f = getBaseName(r["Equipment Tag(From)"]);
+        const t = getBaseName(r["Equipment Tag(To)"]);
+        return nodeMap[f] && nodeMap[t];
+    });
+    const cktFromList = [...new Set(_visibleRows.map(r => r["CKT(From)"]).filter(Boolean))];
+    const cktToList   = [...new Set(_visibleRows.map(r => r["CKT(To)"]).filter(Boolean))];
 
     // 위치 정보
     const pos = `X: ${Math.round(node.x)},  Y: ${Math.round(node.y)}`;
