@@ -94,7 +94,6 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
   display: flex;
   flex-direction: column;
   background: var(--sidebar-bg);
-  border-right: 1px solid var(--sidebar-border);
   z-index: 10;
   box-shadow: 2px 0 5px rgba(0,0,0,0.05);
   transition: width 0.25s ease, min-width 0.25s ease;
@@ -198,26 +197,16 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 
 /* 사이드바 너비 조절 핸들 */
 #sidebar-resize {
-  width: 5px;
+  width: 6px;
   flex-shrink: 0;
   cursor: col-resize;
-  background: transparent;
-  position: relative;
+  background: var(--sidebar-border, #dee2e6);
   z-index: 15;
-  transition: background 0.2s;
+  transition: background 0.15s;
+  user-select: none;
 }
-#sidebar-resize::after {
-  content: '';
-  position: absolute;
-  left: 2px;
-  top: 0;
-  width: 1px;
-  height: 100%;
-  background: transparent;
-  transition: background 0.2s;
-}
-#sidebar-resize:hover::after,
-#sidebar-resize.active::after {
+#sidebar-resize:hover,
+#sidebar-resize.active {
   background: var(--accent, #0d6efd);
 }
 #sidebar.collapsed + #sidebar-resize { display: none; }
