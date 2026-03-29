@@ -608,7 +608,7 @@ function setAsCenter(tag) {
     // expandNode는 더블클릭/더블탭에서만 호출 (단일 클릭 시 확장 안 함)
 }
 
-// ── 12. 자동 레이아웃 (계층 정렬) ────────────────────────────
+// ── 12. 자동 레이아웃 (연결 그룹별 계층 정렬) ────────────────
 function autoLayout() {
     const tags = Object.keys(nodeMap);
     if (tags.length === 0) return;
@@ -616,7 +616,7 @@ function autoLayout() {
     const container = document.getElementById("canvas-container");
     const containerW = container.clientWidth || 800;
 
-    // 방향 그래프 구축 (공급원 → 부하)
+    // 방향 그래프 구축
     const children = {}, parents = {};
     tags.forEach(t => { children[t] = []; parents[t] = []; });
     edgeList.forEach(({ fromTag: f, toTag: t }) => {
@@ -626,42 +626,80 @@ function autoLayout() {
         }
     });
 
-    // Kahn 알고리즘으로 위상 정렬 + 레벨(깊이) 계산
-    const level = {};
-    const inDeg = {};
-    tags.forEach(t => { level[t] = 0; inDeg[t] = parents[t].length; });
-    const queue = tags.filter(t => inDeg[t] === 0);
-
-    while (queue.length > 0) {
-        const n = queue.shift();
-        children[n].forEach(c => {
-            level[c] = Math.max(level[c], level[n] + 1);
-            if (--inDeg[c] === 0) queue.push(c);
-        });
-    }
-    // 사이클 노드는 레벨 0으로
-    tags.filter(t => inDeg[t] > 0).forEach(t => level[t] = 0);
-
-    // 레벨별 그룹화
-    const byLevel = {};
-    tags.forEach(t => {
-        const l = level[t];
-        (byLevel[l] = byLevel[l] || []).push(t);
+    // 무방향 BFS로 연결된 컴포넌트(그룹) 탐색
+    const visited = new Set();
+    const components = [];
+    tags.forEach(start => {
+        if (visited.has(start)) return;
+        const comp = [];
+        const q = [start];
+        while (q.length) {
+            const n = q.shift();
+            if (visited.has(n)) continue;
+            visited.add(n);
+            comp.push(n);
+            children[n].forEach(c => { if (!visited.has(c)) q.push(c); });
+            parents[n].forEach(p => { if (!visited.has(p)) q.push(p); });
+        }
+        components.push(comp);
     });
 
-    // 레벨별 Y 좌표 및 X 균등 배분
-    Object.entries(byLevel).forEach(([l, nodes]) => {
-        const y = parseInt(l) * (NODE_H + V_GAP) + 80;
-        const STEP = Math.max(...nodes.map(nodeWidth)) + H_GAP;
-        const startX = containerW / 2 - ((nodes.length - 1) * STEP) / 2;
-        nodes.forEach((t, i) => {
-            nodeMap[t].x = startX + i * STEP;
-            nodeMap[t].y = y;
+    const LEVEL_H = NODE_H + V_GAP;
+    const COMP_GAP = 80; // 그룹 간 간격
+
+    // 각 컴포넌트 내 위상정렬 레벨 계산 + 상대 좌표 산출
+    const compLayouts = components.map(comp => {
+        const inDeg = {}, lvl = {};
+        comp.forEach(t => {
+            inDeg[t] = parents[t].filter(p => comp.includes(p)).length;
+            lvl[t] = 0;
         });
+        const q = comp.filter(t => inDeg[t] === 0);
+        while (q.length) {
+            const n = q.shift();
+            children[n].filter(c => comp.includes(c)).forEach(c => {
+                lvl[c] = Math.max(lvl[c], lvl[n] + 1);
+                if (--inDeg[c] === 0) q.push(c);
+            });
+        }
+        comp.filter(t => inDeg[t] > 0).forEach(t => lvl[t] = 0); // 사이클
+
+        // 레벨별 행 그룹
+        const byLevel = {};
+        comp.forEach(t => (byLevel[lvl[t]] = byLevel[lvl[t]] || []).push(t));
+
+        // 중심 기준 상대 좌표 계산
+        let compW = 0;
+        const pos = {};
+        Object.entries(byLevel).forEach(([l, nodes]) => {
+            const maxNW = Math.max(...nodes.map(nodeWidth));
+            const step  = maxNW + H_GAP;
+            nodes.forEach((t, i) => {
+                pos[t] = { x: (i - (nodes.length - 1) / 2) * step, y: parseInt(l) * LEVEL_H };
+            });
+            compW = Math.max(compW, (nodes.length - 1) * step + maxNW);
+        });
+
+        return { comp, pos, width: Math.max(compW, nodeWidth(comp[0])) };
     });
 
-    renderTree(null); // 재렌더 + 화면 맞춤
+    // 전체를 가로 중앙 정렬로 컴포넌트 배치
+    const totalW = compLayouts.reduce((s, c) => s + c.width, 0)
+                 + COMP_GAP * (compLayouts.length - 1);
+    let cx = containerW / 2 - totalW / 2;
+
+    compLayouts.forEach(({ comp, pos, width }) => {
+        const compCX = cx + width / 2;
+        comp.forEach(t => {
+            nodeMap[t].x = compCX + pos[t].x;
+            nodeMap[t].y = pos[t].y + 80;
+        });
+        cx += width + COMP_GAP;
+    });
+
+    renderTree(null);
 }
+
 
 // ── 13. 트리 초기화 ──────────────────────────────────────────
 function resetTree() {
