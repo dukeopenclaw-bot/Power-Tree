@@ -401,7 +401,8 @@ function _setupInteractions(sel, tag) {
         if (clickTimer) {
             clearTimeout(clickTimer);
             clickTimer = null;
-            expandNode(tag);
+            // 더블클릭 → 선택장비로 지정 (트리 재구성)
+            drawTree(tag);
         } else {
             clickTimer = setTimeout(() => {
                 clickTimer = null;
@@ -415,7 +416,8 @@ function _setupInteractions(sel, tag) {
         pressTimer = setTimeout(() => {
             longFired = true;
             pressTimer = null;
-            expandNode(tag);
+            // 길게 터치 → 선택장비로 지정 (트리 재구성)
+            drawTree(tag);
         }, 600);
     })
     .on("touchend.interact", (event) => {
@@ -439,6 +441,71 @@ function changeColCount(delta) {
     colCount = next;
     document.getElementById("col-count").textContent = colCount;
     if (tgt) drawTree(tgt);
+}
+
+// ── 11. 트리에 태그 추가 (기존 트리 유지) ──────────────────────
+function addTagToTree(tag) {
+    const base = getBaseName(tag);
+    // 이미 있으면 팝업만 표시
+    if (nodeMap[base]) { showNodeInfo(base); return; }
+
+    // 트리가 비어있으면 새로 시작
+    if (Object.keys(nodeMap).length === 0) {
+        drawTree(base);
+        return;
+    }
+
+    // 기존 노드 bounding box 계산 → 오른쪽 아래에 배치
+    const nodes = Object.values(nodeMap);
+    const maxY  = Math.max(...nodes.map(n => n.y));
+    const avgX  = nodes.reduce((s, n) => s + n.x, 0) / nodes.length;
+
+    const fromRows = powerData.filter(d => getBaseName(d["Equipment Tag(To)"])   === base);
+    const toRows   = powerData.filter(d => getBaseName(d["Equipment Tag(From)"]) === base);
+
+    const newFrom = [...new Set(fromRows.map(d => getBaseName(d["Equipment Tag(From)"])))]
+        .filter(t => t && t !== base && !nodeMap[t]);
+    const newTo   = [...new Set(toRows.map(d => getBaseName(d["Equipment Tag(To)"])))]
+        .filter(t => t && t !== base && !nodeMap[t]);
+
+    const allNew = [base, ...newFrom, ...newTo];
+    const STEP   = Math.max(...allNew.map(nodeWidth)) + H_GAP;
+
+    const cx = avgX;
+    const cy = maxY + V_GAP * 2;
+
+    nodeMap[base] = { x: cx, y: cy, type: "center", w: nodeWidth(base), expanded: true };
+
+    newFrom.forEach((t, i) => {
+        const total = newFrom.length;
+        nodeMap[t] = { x: cx + (i - (total-1)/2)*STEP, y: cy - V_GAP, type: "from", w: nodeWidth(t), expanded: false };
+    });
+    newTo.forEach((t, i) => {
+        const row = Math.floor(i / colCount), col = i % colCount;
+        const rowCount = Math.min(newTo.length - row * colCount, colCount);
+        nodeMap[t] = {
+            x: cx - ((rowCount-1)*STEP)/2 + col*STEP,
+            y: cy + V_GAP + row*(NODE_H + V_GAP*0.6),
+            type: "to", w: nodeWidth(t), expanded: false
+        };
+    });
+
+    _collectEdges([...fromRows, ...toRows], base);
+
+    const svg = d3.select("#tree-svg");
+    const cur = svgZoom ? d3.zoomTransform(svg.node()) : null;
+    renderTree(cur);
+}
+
+// ── 12. 트리 초기화 ──────────────────────────────────────────
+function resetTree() {
+    nodeMap  = {};
+    edgeList = [];
+    tgt      = "";
+    svgZoom  = null;
+    d3.select("#tree-svg").selectAll("*").remove();
+    const hint = document.getElementById("hint");
+    if (hint) hint.classList.remove("hidden");
 }
 
 // ── 10. 노드 정보 팝업 ────────────────────────────────────────
