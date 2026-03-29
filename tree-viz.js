@@ -500,17 +500,26 @@ function addTagToTree(tag) {
 // ── 11c. 선택장비 지정 (기존 노드 유지, tgt + 타입만 변경) ──────
 function setAsCenter(tag) {
     if (!nodeMap[tag]) return;
-    // 기존 center → from 또는 to 타입으로 원복
-    if (tgt && nodeMap[tgt]) {
-        nodeMap[tgt].type = "from"; // 이전 center는 from으로 표시
+
+    // 이전 center → from 타입으로 DOM 직접 변경 (re-render 없이)
+    if (tgt && nodeMap[tgt] && tgt !== tag) {
+        nodeMap[tgt].type = "from";
+        d3.selectAll(".node")
+            .filter(function() { return d3.select(this).attr("data-tag") === tgt; })
+            .attr("class", "node node-from");
     }
+
+    // 새 center 지정
     tgt = tag;
     nodeMap[tag].type = "center";
-    nodeMap[tag].expanded = true;
-    // 현재 줌 유지하면서 재렌더
-    const svg = d3.select("#tree-svg");
-    const cur = svgZoom ? d3.zoomTransform(svg.node()) : null;
-    renderTree(cur);
+    d3.selectAll(".node")
+        .filter(function() { return d3.select(this).attr("data-tag") === tag; })
+        .attr("class", "node node-center");
+
+    // 미확장 상태면 연결 노드(from/to) 펼치기
+    if (!nodeMap[tag].expanded) {
+        expandNode(tag); // 내부에서 renderTree 호출
+    }
 }
 
 // ── 12. 트리 초기화 ──────────────────────────────────────────
