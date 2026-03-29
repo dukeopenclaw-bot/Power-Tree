@@ -747,34 +747,36 @@ function _positionTooltip(tag) {
         return d3.select(this).attr("data-tag") === tag;
     }).node();
 
-    let screenX, screenY, nodeH = NODE_H;
+    let screenX, nodeBottom, nodeTop;
     if (nodeEl) {
         const r = nodeEl.getBoundingClientRect();
-        screenX = r.left + r.width  / 2;
-        screenY = r.bottom + 4;
-        nodeH   = r.height;
+        screenX    = r.left + r.width / 2;
+        nodeBottom = r.bottom;
+        nodeTop    = r.top;
     } else {
-        // fallback: SVG 좌표 변환
         const svgEl = document.getElementById("tree-svg");
         const rect  = svgEl.getBoundingClientRect();
         const tr    = svgZoom ? d3.zoomTransform(svgEl) : d3.zoomIdentity;
         const node  = nodeMap[tag];
-        screenX = rect.left + tr.applyX(node.x);
-        screenY = rect.top  + tr.applyY(node.y + NODE_H / 2 + 2);
+        screenX    = rect.left + tr.applyX(node.x);
+        nodeBottom = rect.top  + tr.applyY(node.y + NODE_H / 2 + 2);
+        nodeTop    = nodeBottom - NODE_H * (tr.k || 1);
     }
 
     const W  = window.innerWidth, H = window.innerHeight;
-    const tw = el.offsetWidth  || 280;
-    const th = el.offsetHeight || 200;
+    const tw = el.offsetWidth  || 260;
+    const th = el.offsetHeight || 120;
 
     let x = screenX - tw / 2;
-    let y = screenY + 4;
+    let y = nodeBottom + 6; // 노드 바로 아래, 겹치지 않게
 
-    // 뷰포트 넘침 보정
+    // 아래 공간 부족 → 노드 위쪽에 배치 (겹침 없음)
+    if (y + th > H - 8) y = nodeTop - th - 6;
+    // 위로 넘침 보정
+    if (y < 8) y = 8;
+    // 좌우 보정
     if (x + tw > W - 8) x = W - tw - 8;
     if (x < 8) x = 8;
-    if (y + th > H - 8) y = screenY - nodeH - th - 8; // 공간 없으면 위로
-    if (y < 8) y = 8;
 
     el.style.left = x + "px";
     el.style.top  = y + "px";
@@ -800,7 +802,7 @@ function showNodeInfo(tag) {
         getBaseName(d["Equipment Tag(To)"])   === tag
     );
 
-    // Description 추출 (From 또는 To 쪽에서)
+    // 설명 (Description)
     let desc = "";
     for (const r of rows) {
         if (getBaseName(r["Equipment Tag(From)"]) === tag && r["Description(From)"]) {
@@ -812,54 +814,40 @@ function showNodeInfo(tag) {
         if (r["Description"]) { desc = r["Description"]; break; }
     }
 
-    // 공급원 (From) 목록 - 현재 화면에 표시된 노드만
-    const fromList = [...new Set(
-        rows.filter(r => {
-            const f = getBaseName(r["Equipment Tag(From)"]);
-            return getBaseName(r["Equipment Tag(To)"]) === tag && nodeMap[f];
-        })
-        .map(r => getBaseName(r["Equipment Tag(From)"]))
-        .filter(Boolean)
-    )];
+    // 위치 - 컬럼명에 location/위치/area/zone 포함되는 것 자동 탐색
+    let location = "";
+    if (rows.length > 0) {
+        const locKey = Object.keys(rows[0]).find(k => /location|위치|area|zone/i.test(k));
+        if (locKey) {
+            for (const r of rows) { if (r[locKey]) { location = r[locKey]; break; } }
+        }
+    }
 
-    // 부하 (To) 목록 - 현재 화면에 표시된 노드만
-    const toList = [...new Set(
-        rows.filter(r => {
-            const t = getBaseName(r["Equipment Tag(To)"]);
-            return getBaseName(r["Equipment Tag(From)"]) === tag && nodeMap[t];
-        })
-        .map(r => getBaseName(r["Equipment Tag(To)"]))
-        .filter(Boolean)
-    )];
+    // 이 노드로 들어오는 엣지 (화면에 있는 공급원 → 이 노드)
+    const incomingRows = rows.filter(r =>
+        getBaseName(r["Equipment Tag(To)"]) === tag &&
+        nodeMap[getBaseName(r["Equipment Tag(From)"])]
+    );
 
-    // CKT(From) - 화면에 표시된 엣지(양쪽 노드 모두 nodeMap)의 것만
-    const _visibleRows = rows.filter(r => {
-        const f = getBaseName(r["Equipment Tag(From)"]);
-        const t = getBaseName(r["Equipment Tag(To)"]);
-        return nodeMap[f] && nodeMap[t];
-    });
-    const cktFromList = [...new Set(_visibleRows.map(r => r["CKT(From)"]).filter(Boolean))];
-    const cktToList   = [...new Set(_visibleRows.map(r => r["CKT(To)"]).filter(Boolean))];
+    // 상단 CKT: 공급원 측 회로 번호 (CKT(From))
+    const upstreamCkt = [...new Set(incomingRows.map(r => r["CKT(From)"]).filter(Boolean))];
 
-    // 위치 정보
-    const pos = `X: ${Math.round(node.x)},  Y: ${Math.round(node.y)}`;
+    // 자기 CKT: 이 노드의 수전 회로 번호 (CKT(To))
+    const ownCkt = [...new Set(incomingRows.map(r => r["CKT(To)"]).filter(Boolean))];
 
-    // 추가 컬럼 키 수집 (위의 것 제외한 나머지)
-    const knownKeys = new Set([
-        "Equipment Tag(From)", "Equipment Tag(To)",
-        "Description(From)", "Description(To)", "Description",
-        "CKT(From)", "CKT(To)"
-    ]);
-    const extraKeys = rows.length > 0
-        ? Object.keys(rows[0]).filter(k => !knownKeys.has(k))
-        : [];
-    const extraRows = [...new Set(
-        rows.flatMap(r => extraKeys.map(k => r[k] ? `${k}: ${r[k]}` : "").filter(Boolean))
-    )];
+    // EDB 회로 목록: -XXX 세자리 번호
+    let edbSuffixes = [];
+    if (/EDB/i.test(tag)) {
+        edbSuffixes = [...new Set(
+            powerData
+                .map(d => d["Equipment Tag(From)"])
+                .filter(f => f && getBaseName(f) === tag)
+                .map(f => getEdbSuffix(f))
+                .filter(Boolean)
+        )].sort();
+    }
 
-    // 모달 내용 구성
-    const row = (label, val) => val
-        ? `<tr><th>${label}</th><td>${val}</td></tr>` : "";
+    const row     = (label, val) => val ? `<tr><th>${label}</th><td>${val}</td></tr>` : "";
     const listRow = (label, arr) => arr.length
         ? `<tr><th>${label}</th><td>${arr.join("<br>")}</td></tr>` : "";
 
@@ -868,15 +856,10 @@ function showNodeInfo(tag) {
         <table class="info-table">
           <tbody>
             ${row("설명", desc)}
-            ${row("타입", node.type === "center" ? "선택 장비" :
-                          node.type === "from"   ? "공급원" :
-                          node.type === "mutual" ? "상호 공급" : "부하")}
-            ${listRow("공급원 (From)", fromList)}
-            ${listRow("CKT (From)", cktFromList)}
-            ${listRow("부하 (To)", toList)}
-            ${listRow("CKT (To)", cktToList)}
-            ${extraRows.map(s => `<tr><td colspan="2" class="extra-row">${s}</td></tr>`).join("")}
-            ${row("화면 좌표", pos)}
+            ${row("위치", location)}
+            ${listRow("상단 CKT", upstreamCkt)}
+            ${listRow("자기 CKT", ownCkt)}
+            ${edbSuffixes.length ? `<tr><th>회로</th><td>${edbSuffixes.join(", ")}</td></tr>` : ""}
           </tbody>
         </table>`;
 
@@ -889,7 +872,7 @@ function showNodeInfo(tag) {
     const el = document.getElementById("node-tooltip");
     el.style.left    = "-9999px"; // 렌더 전 화면 밖에서 크기 계산
     el.style.display = "block";
-    requestAnimationFrame(() => _positionTooltip(tag)); // 노드 아래에 배치
+    requestAnimationFrame(() => _positionTooltip(tag));
 }
 
 function closeNodeModal() {
