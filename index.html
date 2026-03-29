@@ -109,7 +109,8 @@
 <script>
   // ── PWA 서비스 워커 등록 ──────────────────────────
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('./sw.js')
+    // updateViaCache:'none' → 브라우저 HTTP 캐시 무시하고 sw.js 항상 새로 확인
+    navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' })
       .catch(err => console.warn('SW 등록 실패:', err));
     // 새 SW 활성화 시 자동 리로드 → 항상 최신 버전 표시
     navigator.serviceWorker.addEventListener('message', event => {
