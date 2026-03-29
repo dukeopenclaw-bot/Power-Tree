@@ -115,6 +115,10 @@
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./sw.js')
       .catch(err => console.warn('SW 등록 실패:', err));
+    // 새 SW 활성화 시 자동 리로드 → 항상 최신 버전 표시
+    navigator.serviceWorker.addEventListener('message', event => {
+      if (event.data && event.data.type === 'SW_UPDATED') window.location.reload();
+    });
   }
 
   // ── 툴바 줌 제어 (svgZoom은 tree-viz.js 전역 변수) ──────────
