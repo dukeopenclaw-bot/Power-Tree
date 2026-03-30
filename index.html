@@ -30,7 +30,7 @@
       <div class="sidebar-header">
         <div class="sidebar-title">
           <h1>Power Tree</h1>
-          <span class="version">V4.7</span>
+          <span class="version">V4.8</span>
         </div>
         <button id="btn-reset" onclick="resetTree()" title="초기화">↺</button>
       </div>
@@ -178,6 +178,7 @@
 
   function updateOrientationBtn() {
     const btn = document.getElementById('btn-orientation');
+    if (!btn) return;
     if (orientationLocked) {
       btn.textContent = '🔒';
       btn.title = '세로 고정 중 — 탭하면 회전 허용';
@@ -193,30 +194,29 @@
 
   function applyOrientationTransform() {
     const app = document.getElementById('app');
+    if (!app) return;
     const W = window.innerWidth;
     const H = window.innerHeight;
-    const isLandscape = W > H;
 
-    if (orientationLocked && isLandscape) {
-      // 가로 상태에서 #app을 -90도 회전해 세로처럼 보이게 함
-      app.style.position       = 'fixed';
-      app.style.width          = H + 'px';
-      app.style.height         = W + 'px';
-      app.style.left           = ((W - H) / 2) + 'px';
-      app.style.top            = ((H - W) / 2) + 'px';
+    if (orientationLocked && W > H) {
+      // 기기가 어느 방향으로 돌아갔는지 감지해 보정 방향 결정
+      const angle = (screen.orientation && screen.orientation.angle != null)
+        ? screen.orientation.angle
+        : (window.orientation || 0);
+      // angle=270(-90): 시계방향 회전 → +90도 보정
+      // angle=90: 반시계방향 회전 → -90도 보정
+      const rotDeg = (angle === 270 || angle === -90) ? 90 : -90;
+
+      app.style.position        = 'fixed';
+      app.style.width           = H + 'px';
+      app.style.height          = W + 'px';
+      app.style.left            = ((W - H) / 2) + 'px';
+      app.style.top             = ((H - W) / 2) + 'px';
       app.style.transformOrigin = '50% 50%';
-      app.style.transform      = 'rotate(-90deg)';
-      app.style.overflow       = 'hidden';
+      app.style.transform       = 'rotate(' + rotDeg + 'deg)';
+      app.style.overflow        = 'hidden';
     } else {
-      // 세로 상태 또는 잠금 해제: 원래대로
-      app.style.position       = '';
-      app.style.width          = '';
-      app.style.height         = '';
-      app.style.left           = '';
-      app.style.top            = '';
-      app.style.transformOrigin = '';
-      app.style.transform      = '';
-      app.style.overflow       = '';
+      app.style.cssText = '';
     }
   }
 
@@ -226,13 +226,23 @@
     applyOrientationTransform();
   }
 
-  // 회전 감지 시 재적용 (orientationchange는 딜레이 후 실제 크기 반영됨)
+  // 회전 감지 — 여러 이벤트로 중복 등록해 누락 방지
   window.addEventListener('resize', applyOrientationTransform);
-  window.addEventListener('orientationchange', () => setTimeout(applyOrientationTransform, 100));
+  window.addEventListener('orientationchange', function() {
+    setTimeout(applyOrientationTransform, 50);
+    setTimeout(applyOrientationTransform, 200);
+  });
+  if (screen.orientation) {
+    screen.orientation.addEventListener('change', function() {
+      setTimeout(applyOrientationTransform, 50);
+      setTimeout(applyOrientationTransform, 200);
+    });
+  }
 
   window.addEventListener('load', () => {
     updateOrientationBtn();
     applyOrientationTransform();
+  });
   });
 
   // ── 사이드바 너비 드래그 조절 ────────────────────────
