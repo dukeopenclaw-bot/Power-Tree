@@ -30,7 +30,7 @@
       <div class="sidebar-header">
         <div class="sidebar-title">
           <h1>Power Tree</h1>
-          <span class="version">V4.5</span>
+          <span class="version">V4.6</span>
         </div>
         <button id="btn-reset" onclick="resetTree()" title="초기화">↺</button>
       </div>
@@ -191,36 +191,36 @@
     }
   }
 
-  async function applyOrientationLock() {
+  function applyOrientationCss() {
+    if (orientationLocked) {
+      document.body.classList.add('portrait-locked');
+    } else {
+      document.body.classList.remove('portrait-locked');
+    }
+  }
+
+  async function applyOrientationApi() {
     if (!screen.orientation || !screen.orientation.lock) return;
     try {
       if (orientationLocked) {
-        // 브라우저 탭에서는 전체화면 필요, PWA standalone은 바로 가능
-        const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
-        if (!isStandalone && !document.fullscreenElement) {
-          await document.documentElement.requestFullscreen({ navigationUI: 'hide' }).catch(() => {});
-        }
         await screen.orientation.lock('portrait');
       } else {
         screen.orientation.unlock();
-        if (document.fullscreenElement) {
-          document.exitFullscreen().catch(() => {});
-        }
       }
-    } catch (e) { /* 미지원 환경 */ }
+    } catch (e) { /* CSS transform으로 대체 처리 */ }
   }
 
   function toggleOrientationLock() {
     orientationLocked = !orientationLocked;
     updateOrientationBtn();
-    applyOrientationLock();
+    applyOrientationCss();
+    applyOrientationApi();
   }
 
-  // 페이지 완전 로드 후 초기 버튼 상태 설정 + PWA standalone이면 바로 잠금
   window.addEventListener('load', () => {
     updateOrientationBtn();
-    const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
-    if (isStandalone) setTimeout(applyOrientationLock, 300);
+    applyOrientationCss();
+    applyOrientationApi();
   });
 
   // ── 사이드바 너비 드래그 조절 ────────────────────────

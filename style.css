@@ -79,6 +79,22 @@
 
 html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(--text); }
 
+/* ─── 세로 고정: 가로 모드에서 #app을 90도 회전해 세로처럼 표시 ─── */
+@media screen and (orientation: landscape) {
+  body.portrait-locked #app {
+    position: fixed;
+    left: 50%;
+    top: 50%;
+    width: 100vh;
+    height: 100vw;
+    margin-left: calc(-100vh / 2);
+    margin-top: calc(-100vw / 2);
+    transform-origin: 50% 50%;
+    transform: rotate(-90deg);
+    overflow: hidden;
+  }
+}
+
 /* ─── Layout ─── */
 #app {
   display: flex;
