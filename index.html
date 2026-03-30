@@ -30,7 +30,7 @@
       <div class="sidebar-header">
         <div class="sidebar-title">
           <h1>Power Tree</h1>
-          <span class="version">V4.3</span>
+          <span class="version">V4.4</span>
         </div>
         <button id="btn-reset" onclick="resetTree()" title="초기화">↺</button>
       </div>
@@ -176,6 +176,21 @@
   // ── 화면 회전 잠금 ───────────────────────────────────
   let orientationLocked = true;
 
+  function updateOrientationBtn() {
+    const btn = document.getElementById('btn-orientation');
+    if (orientationLocked) {
+      btn.textContent = '🔒';
+      btn.title = '세로 고정 중 — 탭하면 회전 허용';
+      btn.classList.add('orient-locked');
+      btn.classList.remove('orient-free');
+    } else {
+      btn.textContent = '🔄';
+      btn.title = '회전 자유 — 탭하면 세로 고정';
+      btn.classList.add('orient-free');
+      btn.classList.remove('orient-locked');
+    }
+  }
+
   async function applyOrientationLock() {
     if (!screen.orientation || !screen.orientation.lock) return;
     try {
@@ -184,19 +199,20 @@
       } else {
         screen.orientation.unlock();
       }
-    } catch (e) { /* 브라우저 환경에서는 미지원 */ }
+    } catch (e) { /* standalone PWA 외 환경에서는 미지원 */ }
   }
 
   function toggleOrientationLock() {
     orientationLocked = !orientationLocked;
-    const btn = document.getElementById('btn-orientation');
-    btn.textContent = orientationLocked ? '🔒' : '🔓';
-    btn.title = orientationLocked ? '세로 고정 (탭하여 해제)' : '회전 자유 (탭하여 고정)';
+    updateOrientationBtn();
     applyOrientationLock();
   }
 
-  // 초기 세로 고정 적용
-  applyOrientationLock();
+  // 페이지 완전 로드 후 세로 고정 적용 (사용자 제스처 없이도 PWA 환경에서 동작)
+  window.addEventListener('load', () => {
+    updateOrientationBtn();
+    setTimeout(applyOrientationLock, 300);
+  });
 
   // ── 사이드바 너비 드래그 조절 ────────────────────────
   (function () {

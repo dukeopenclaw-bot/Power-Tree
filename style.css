@@ -237,6 +237,8 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
   padding: 0;
 }
 #btn-orientation:hover { background: #f0f4ff; border-color: #1a8fe3; }
+#btn-orientation.orient-locked { border-color: #1a8fe3; background: #e8f4fd; color: #1a8fe3; }
+#btn-orientation.orient-free   { border-color: #aaa;    background: #f5f5f5; color: #666; }
 
 #searchInput {
   width: 100%;
