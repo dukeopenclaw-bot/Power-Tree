@@ -214,32 +214,6 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 
 .search-box { padding: 14px; }
 
-.search-row {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-}
-.search-row #searchInput { flex: 1; }
-
-#btn-orientation {
-  flex-shrink: 0;
-  width: 34px;
-  height: 34px;
-  background: none;
-  border: 1px solid #ccc;
-  border-radius: 6px;
-  font-size: 16px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.15s;
-  padding: 0;
-}
-#btn-orientation:hover { background: #f0f4ff; border-color: #1a8fe3; }
-#btn-orientation.orient-locked { border-color: #1a8fe3; background: #e8f4fd; color: #1a8fe3; }
-#btn-orientation.orient-free   { border-color: #aaa;    background: #f5f5f5; color: #666; }
-
 #searchInput {
   width: 100%;
   padding: 10px 14px;

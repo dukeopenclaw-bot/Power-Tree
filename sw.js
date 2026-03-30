@@ -1,12 +1,10 @@
-const CACHE_NAME = 'power-tree-v40';
+const CACHE_NAME = 'power-tree-v33';
 const STATIC_ASSETS = [
   './index.html',
   './style.css',
   './api.js',
   './tree-viz.js',
   './manifest.json',
-  './icon-192.png',
-  './icon-512.png',
   'https://d3js.org/d3.v7.min.js'
 ];
 
