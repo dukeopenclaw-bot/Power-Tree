@@ -30,7 +30,7 @@
       <div class="sidebar-header">
         <div class="sidebar-title">
           <h1>Power Tree</h1>
-          <span class="version">V4.4</span>
+          <span class="version">V4.5</span>
         </div>
         <button id="btn-reset" onclick="resetTree()" title="초기화">↺</button>
       </div>
@@ -195,11 +195,19 @@
     if (!screen.orientation || !screen.orientation.lock) return;
     try {
       if (orientationLocked) {
+        // 브라우저 탭에서는 전체화면 필요, PWA standalone은 바로 가능
+        const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
+        if (!isStandalone && !document.fullscreenElement) {
+          await document.documentElement.requestFullscreen({ navigationUI: 'hide' }).catch(() => {});
+        }
         await screen.orientation.lock('portrait');
       } else {
         screen.orientation.unlock();
+        if (document.fullscreenElement) {
+          document.exitFullscreen().catch(() => {});
+        }
       }
-    } catch (e) { /* standalone PWA 외 환경에서는 미지원 */ }
+    } catch (e) { /* 미지원 환경 */ }
   }
 
   function toggleOrientationLock() {
@@ -208,10 +216,11 @@
     applyOrientationLock();
   }
 
-  // 페이지 완전 로드 후 세로 고정 적용 (사용자 제스처 없이도 PWA 환경에서 동작)
+  // 페이지 완전 로드 후 초기 버튼 상태 설정 + PWA standalone이면 바로 잠금
   window.addEventListener('load', () => {
     updateOrientationBtn();
-    setTimeout(applyOrientationLock, 300);
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
+    if (isStandalone) setTimeout(applyOrientationLock, 300);
   });
 
   // ── 사이드바 너비 드래그 조절 ────────────────────────
