@@ -30,7 +30,7 @@
       <div class="sidebar-header">
         <div class="sidebar-title">
           <h1>Power Tree</h1>
-          <span class="version">V4.6</span>
+          <span class="version">V4.7</span>
         </div>
         <button id="btn-reset" onclick="resetTree()" title="초기화">↺</button>
       </div>
@@ -191,36 +191,48 @@
     }
   }
 
-  function applyOrientationCss() {
-    if (orientationLocked) {
-      document.body.classList.add('portrait-locked');
-    } else {
-      document.body.classList.remove('portrait-locked');
-    }
-  }
+  function applyOrientationTransform() {
+    const app = document.getElementById('app');
+    const W = window.innerWidth;
+    const H = window.innerHeight;
+    const isLandscape = W > H;
 
-  async function applyOrientationApi() {
-    if (!screen.orientation || !screen.orientation.lock) return;
-    try {
-      if (orientationLocked) {
-        await screen.orientation.lock('portrait');
-      } else {
-        screen.orientation.unlock();
-      }
-    } catch (e) { /* CSS transform으로 대체 처리 */ }
+    if (orientationLocked && isLandscape) {
+      // 가로 상태에서 #app을 -90도 회전해 세로처럼 보이게 함
+      app.style.position       = 'fixed';
+      app.style.width          = H + 'px';
+      app.style.height         = W + 'px';
+      app.style.left           = ((W - H) / 2) + 'px';
+      app.style.top            = ((H - W) / 2) + 'px';
+      app.style.transformOrigin = '50% 50%';
+      app.style.transform      = 'rotate(-90deg)';
+      app.style.overflow       = 'hidden';
+    } else {
+      // 세로 상태 또는 잠금 해제: 원래대로
+      app.style.position       = '';
+      app.style.width          = '';
+      app.style.height         = '';
+      app.style.left           = '';
+      app.style.top            = '';
+      app.style.transformOrigin = '';
+      app.style.transform      = '';
+      app.style.overflow       = '';
+    }
   }
 
   function toggleOrientationLock() {
     orientationLocked = !orientationLocked;
     updateOrientationBtn();
-    applyOrientationCss();
-    applyOrientationApi();
+    applyOrientationTransform();
   }
+
+  // 회전 감지 시 재적용 (orientationchange는 딜레이 후 실제 크기 반영됨)
+  window.addEventListener('resize', applyOrientationTransform);
+  window.addEventListener('orientationchange', () => setTimeout(applyOrientationTransform, 100));
 
   window.addEventListener('load', () => {
     updateOrientationBtn();
-    applyOrientationCss();
-    applyOrientationApi();
+    applyOrientationTransform();
   });
 
   // ── 사이드바 너비 드래그 조절 ────────────────────────
