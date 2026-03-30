@@ -36,13 +36,16 @@
       </div>
 
       <div class="search-box">
-        <input
-          type="text"
-          id="searchInput"
-          placeholder="장비 Tag 검색 (예: MCC, EDB...)"
-          autocomplete="off"
-          spellcheck="false"
-        />
+        <div class="search-row">
+          <input
+            type="text"
+            id="searchInput"
+            placeholder="장비 Tag 검색 (예: MCC, EDB...)"
+            autocomplete="off"
+            spellcheck="false"
+          />
+          <button id="btn-orientation" onclick="toggleOrientationLock()" title="세로 고정 (탭하여 해제)">🔒</button>
+        </div>
       </div>
 
       <ul id="resultList"></ul>
@@ -169,6 +172,31 @@
     });
     observer.observe(container);
   })();
+
+  // ── 화면 회전 잠금 ───────────────────────────────────
+  let orientationLocked = true;
+
+  async function applyOrientationLock() {
+    if (!screen.orientation || !screen.orientation.lock) return;
+    try {
+      if (orientationLocked) {
+        await screen.orientation.lock('portrait');
+      } else {
+        screen.orientation.unlock();
+      }
+    } catch (e) { /* 브라우저 환경에서는 미지원 */ }
+  }
+
+  function toggleOrientationLock() {
+    orientationLocked = !orientationLocked;
+    const btn = document.getElementById('btn-orientation');
+    btn.textContent = orientationLocked ? '🔒' : '🔓';
+    btn.title = orientationLocked ? '세로 고정 (탭하여 해제)' : '회전 자유 (탭하여 고정)';
+    applyOrientationLock();
+  }
+
+  // 초기 세로 고정 적용
+  applyOrientationLock();
 
   // ── 사이드바 너비 드래그 조절 ────────────────────────
   (function () {
