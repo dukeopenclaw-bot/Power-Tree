@@ -784,6 +784,12 @@ document.addEventListener("DOMContentLoaded", () => {
         if (_tooltipHideTimer) { clearTimeout(_tooltipHideTimer); _tooltipHideTimer = null; }
     });
     el.addEventListener("mouseleave", () => { closeNodeModal(); });
+
+    // 툴팁 바깥 클릭/터치 시 닫기
+    document.addEventListener("pointerdown", (e) => {
+        if (el.style.display === "none") return;
+        if (!el.contains(e.target)) closeNodeModal();
+    });
 });
 
 function showNodeInfo(tag) {
