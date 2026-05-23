@@ -78,30 +78,29 @@ function drawTree(targetTag) {
     const onlyFromTags = fromTags.filter(t => !mutualSet.has(t));
     const mutualTags   = [...mutualSet];
 
-    const allTags = [tgt, ...fromTags, ...mutualTags];
+    const allTags = [tgt, ...mutualTags];
     const STEP = Math.max(...allTags.map(nodeWidth)) + H_GAP;
 
-    // 초기 표시: 공급원(from) + 상호 노드만. 부하(to)는 더블클릭으로 확장.
-    nodeMap[tgt] = { x: cx, y: cy, type: "center", w: nodeWidth(tgt), expanded: false };
+    // 초기 표시: center + 상호 노드만.
+    // 상위/하위는 왼쪽/오른쪽 더블클릭으로 각각 확장.
+    nodeMap[tgt] = {
+        x: cx, y: cy, type: "center", w: nodeWidth(tgt),
+        expanded: false, expandedUp: false, expandedDown: false
+    };
 
     // 상호 노드 → 수평 배치 (center 오른쪽)
     mutualTags.forEach((tag, i) => {
         nodeMap[tag] = {
             x: cx + (i + 1) * STEP,
-            y: cy, type: "mutual", w: nodeWidth(tag), expanded: false
+            y: cy, type: "mutual", w: nodeWidth(tag),
+            expanded: false, expandedUp: false, expandedDown: false
         };
     });
 
-    onlyFromTags.forEach((tag, i) => {
-        const total = onlyFromTags.length;
-        nodeMap[tag] = {
-            x: cx + (i - (total - 1) / 2) * STEP,
-            y: cy - V_GAP, type: "from", w: nodeWidth(tag), expanded: false
-        };
-    });
-
-    // 부하(to) 노드는 초기에 배치하지 않음 → 더블클릭 시 expandNode로 표시
-    _collectEdges(fromRows, tgt);
+    // 상호 노드와의 엣지만 초기 수집
+    const mutualSet2 = new Set(mutualTags);
+    const mutualFromRows = fromRows.filter(d => mutualSet2.has(getBaseName(d["Equipment Tag(From)"])));
+    _collectEdges(mutualFromRows, tgt);
     renderTree(null);
 }
 
