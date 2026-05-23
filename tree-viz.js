@@ -443,8 +443,14 @@ function _dragEnd() {
     if (!_hasHover && !_dragging) {
         const tag = d3.select(this).attr("data-tag");
         if (_mobileLongFired) {
-            // 롱프레스 종료 → 확장
-            if (tag && nodeMap[tag] && !nodeMap[tag].expanded) expandNode(tag);
+            // 롱프레스 → 탭 위치 기준 방향별 확장
+            if (tag && nodeMap[tag]) {
+                const nodeEl = document.querySelector(`g.node[data-tag="${tag}"]`);
+                const bbox   = nodeEl ? nodeEl.getBoundingClientRect() : null;
+                const isLeft = bbox ? _mobileTapX < bbox.left + bbox.width / 2 : true;
+                if (isLeft) expandNodeUpstream(tag);
+                else        expandNodeDownstream(tag);
+            }
         } else if (tag) {
             // 탭 처리: 단일탭 → 툴팁, 더블탭 좌/우 → 상위/하위 확장
             const now = Date.now();
