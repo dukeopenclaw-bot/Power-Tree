@@ -485,6 +485,14 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 }
 .node.node-center text { font-weight: 700; }
 
+/* ─── 전원 상태 색상 (ON=적색, OFF=녹색) ─── */
+.node.node-on  rect { fill: #ffcdd2; stroke: #e53935; stroke-width: 2; }
+.node.node-on  text { fill: #b71c1c; }
+.node.node-off rect { fill: #c8e6c9; stroke: #388e3c; stroke-width: 2; }
+.node.node-off text { fill: #1b5e20; }
+.node.node-center.node-on  text,
+.node.node-center.node-off text { font-weight: 700; }
+
 /* ─── SVG Edge Styles ─── */
 .link {
   fill: none;

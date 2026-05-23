@@ -201,6 +201,52 @@ function expandNodeDownstream(tag) {
     renderTree(svgZoom ? d3.zoomTransform(d3.select("#tree-svg").node()) : null);
 }
 
+// ── 2b. 전원 상태 계산 및 색상 적용 ─────────────────────────────
+function recalcPoweredState() {
+    // 1차: userOff 기준 초기화
+    Object.keys(nodeMap).forEach(tag => {
+        nodeMap[tag].powered = !nodeMap[tag].userOff;
+    });
+    // 2차: 상위 노드 전원 전파 (상위가 모두 꺼지면 하위도 꺼짐)
+    let changed = true;
+    while (changed) {
+        changed = false;
+        Object.keys(nodeMap).forEach(tag => {
+            if (nodeMap[tag].userOff) {
+                if (nodeMap[tag].powered !== false) { nodeMap[tag].powered = false; changed = true; }
+                return;
+            }
+            const upTags = edgeList.filter(e => e.toTag === tag).map(e => e.fromTag).filter(t => nodeMap[t]);
+            if (upTags.length === 0) {
+                // 루트 노드: 상위 없으면 켜짐
+                if (nodeMap[tag].powered !== true) { nodeMap[tag].powered = true; changed = true; }
+                return;
+            }
+            const anyOn = upTags.some(t => nodeMap[t].powered);
+            if (nodeMap[tag].powered !== anyOn) { nodeMap[tag].powered = anyOn; changed = true; }
+        });
+    }
+}
+
+function applyPowerColors() {
+    recalcPoweredState();
+    d3.selectAll("g.node").each(function() {
+        const tag  = d3.select(this).attr("data-tag");
+        const node = nodeMap[tag];
+        if (!node) return;
+        d3.select(this)
+            .classed("node-off", node.powered === false)
+            .classed("node-on",  node.powered !== false);
+    });
+}
+
+function toggleNodePower(tag) {
+    const node = nodeMap[tag];
+    if (!node) return;
+    node.userOff = !node.userOff;
+    applyPowerColors();
+}
+
 // ── 3. 엣지 수집 ──────────────────────────────────────────────
 function _collectEdges(rows, anchorBase) {
     rows.forEach(row => {
@@ -230,6 +276,7 @@ function _collectEdges(rows, anchorBase) {
 
 // ── 4. 렌더링 ─────────────────────────────────────────────────
 function renderTree(preservedTransform) {
+    recalcPoweredState();
     const svg        = d3.select("#tree-svg");
     const container  = document.getElementById("canvas-container");
     const containerW = container.clientWidth  || 800;
@@ -315,7 +362,7 @@ function renderTree(preservedTransform) {
     Object.entries(nodeMap).forEach(([tag, node]) => {
         const w  = node.w;
         const ng = nodeLayer.append("g")
-            .attr("class", `node node-${node.type}`)
+            .attr("class", `node node-${node.type} ${node.powered === false ? 'node-off' : 'node-on'}`)
             .attr("transform", `translate(${node.x - w / 2}, ${node.y - NODE_H / 2})`)
             .attr("data-tag", tag)
             .style("cursor", "move")
@@ -396,7 +443,7 @@ function _dragStart(event) {
         _mobilePressTimer = setTimeout(() => {
             _mobileLongFired = true;
             _mobilePressTimer = null;
-            setAsCenter(tag);
+            toggleNodePower(tag);
         }, 600);
     }
 }
@@ -442,14 +489,7 @@ function _dragEnd() {
     if (!_hasHover && !_dragging) {
         const tag = d3.select(this).attr("data-tag");
         if (_mobileLongFired) {
-            // 롱프레스 → 탭 위치 기준 방향별 확장
-            if (tag && nodeMap[tag]) {
-                const nodeEl = document.querySelector(`g.node[data-tag="${tag}"]`);
-                const bbox   = nodeEl ? nodeEl.getBoundingClientRect() : null;
-                const isLeft = bbox ? _mobileTapX < bbox.left + bbox.width / 2 : true;
-                if (isLeft) expandNodeUpstream(tag);
-                else        expandNodeDownstream(tag);
-            }
+            // toggleNodePower는 이미 pressTimer에서 호출됨
         } else if (tag) {
             // 탭 처리: 단일탭 → 툴팁, 더블탭 좌/우 → 상위/하위 확장
             const now = Date.now();
@@ -517,6 +557,11 @@ function _setupInteractions(sel, tag) {
             const isLeft = event.clientX < bbox.left + bbox.width / 2;
             if (isLeft) expandNodeUpstream(tag);
             else        expandNodeDownstream(tag);
+        })
+        .on("contextmenu.interact", (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            toggleNodePower(tag);
         });
     }
     // 모바일: _dragStart/_drag/_dragEnd 에서 탭/더블탭/롱프레스 처리
