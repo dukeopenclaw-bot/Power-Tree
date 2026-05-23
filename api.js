@@ -21,6 +21,9 @@ let searchInput, resultList, statusEl, hintEl;
 // ── 선택 상태 ─────────────────────────────────────────
 let selectedTags = new Set();
 
+// ── 필터 상태 ─────────────────────────────────────────
+let showSpare = false;
+
 // ── 초기화 ────────────────────────────────────────────
 document.addEventListener("DOMContentLoaded", () => {
   searchInput = document.getElementById("searchInput");
@@ -91,6 +94,7 @@ function filterTags(query) {
 
     function tryAdd(base, desc) {
       if (!base || seen.has(base)) return;
+      if (!showSpare && /spare/i.test(base)) return;
       const tagMatch  = base.toUpperCase().includes(q);
       const descMatch = desc.toUpperCase().includes(q);
       const locMatch  = loc.toUpperCase().includes(q);
@@ -192,6 +196,13 @@ function showStatus(msg, type) {
 }
 function hideStatus() {
   if (statusEl) statusEl.style.display = "none";
+}
+
+/** Spare 필터 토글 */
+function updateSpareFilter(checked) {
+  showSpare = checked;
+  const val = searchInput ? searchInput.value.trim() : "";
+  if (val) renderList(filterTags(val));
 }
 
 /** HTML 특수문자 이스케이프 */

@@ -26,6 +26,7 @@ let _mobileLongFired    = false;
 let _mobileLastTapTag   = null;
 let _mobileLastTapTime  = 0;
 let _mobileTapX         = 0;
+let _lastSelectedTag    = null;
 
 // ── 유틸 ─────────────────────────────────────────────────────
 function nodeWidth(tag) {
@@ -69,9 +70,11 @@ function drawTree(targetTag) {
 
     // 베이스 태그 기준으로 중복 제거
     const fromTags = [...new Set(fromRows.map(d => getBaseName(d["Equipment Tag(From)"])))]
-        .filter(t => t && t !== tgt);
+        .filter(t => t && t !== tgt)
+        .filter(t => showSpare || !/spare/i.test(t));
     const toTags   = [...new Set(toRows.map(d =>   getBaseName(d["Equipment Tag(To)"])))]
-        .filter(t => t && t !== tgt);
+        .filter(t => t && t !== tgt)
+        .filter(t => showSpare || !/spare/i.test(t));
 
     // 상호 공급 관계 분리 (fromTags ∩ toTags)
     const mutualSet    = new Set(fromTags.filter(t => toTags.includes(t)));
@@ -116,9 +119,11 @@ function expandNode(tag) {
     const toRows   = powerData.filter(d => getBaseName(d["Equipment Tag(From)"]) === tag);
 
     const newFromTags = [...new Set(fromRows.map(d => getBaseName(d["Equipment Tag(From)"])))]
-        .filter(t => t && t !== tag && !nodeMap[t]);
+        .filter(t => t && t !== tag && !nodeMap[t])
+        .filter(t => showSpare || !/spare/i.test(t));
     const newToTags   = [...new Set(toRows.map(d => getBaseName(d["Equipment Tag(To)"])))]
-        .filter(t => t && t !== tag && !nodeMap[t]);
+        .filter(t => t && t !== tag && !nodeMap[t])
+        .filter(t => showSpare || !/spare/i.test(t));
 
     const allTags = [...Object.keys(nodeMap), ...newFromTags, ...newToTags];
     const STEP = Math.max(...allTags.map(nodeWidth)) + H_GAP;
@@ -158,7 +163,8 @@ function expandNodeUpstream(tag) {
 
     const fromRows    = powerData.filter(d => getBaseName(d["Equipment Tag(To)"]) === tag);
     const newFromTags = [...new Set(fromRows.map(d => getBaseName(d["Equipment Tag(From)"])))]
-        .filter(t => t && t !== tag && !nodeMap[t]);
+        .filter(t => t && t !== tag && !nodeMap[t])
+        .filter(t => showSpare || !/spare/i.test(t));
 
     if (newFromTags.length > 0) {
         const STEP = Math.max(...[...Object.keys(nodeMap), ...newFromTags].map(nodeWidth)) + H_GAP;
@@ -181,7 +187,8 @@ function expandNodeDownstream(tag) {
 
     const toRows    = powerData.filter(d => getBaseName(d["Equipment Tag(From)"]) === tag);
     const newToTags = [...new Set(toRows.map(d => getBaseName(d["Equipment Tag(To)"])))]
-        .filter(t => t && t !== tag && !nodeMap[t]);
+        .filter(t => t && t !== tag && !nodeMap[t])
+        .filter(t => showSpare || !/spare/i.test(t));
 
     if (newToTags.length > 0) {
         const STEP = Math.max(...[...Object.keys(nodeMap), ...newToTags].map(nodeWidth)) + H_GAP;
@@ -245,6 +252,24 @@ function toggleNodePower(tag) {
     if (!node) return;
     node.userOff = !node.userOff;
     applyPowerColors();
+}
+
+function deleteNode(tag) {
+    if (!nodeMap[tag]) return;
+    delete nodeMap[tag];
+    edgeList = edgeList.filter(e => e.fromTag !== tag && e.toTag !== tag);
+    if (tgt === tag) tgt = Object.keys(nodeMap)[0] || "";
+    _lastSelectedTag = null;
+    closeNodeModal();
+    if (Object.keys(nodeMap).length === 0) {
+        d3.select("#tree-svg").selectAll("*").remove();
+        svgZoom = null;
+        const hint = document.getElementById("hint");
+        if (hint) hint.classList.remove("hidden");
+    } else {
+        const cur = svgZoom ? d3.zoomTransform(d3.select("#tree-svg").node()) : null;
+        renderTree(cur);
+    }
 }
 
 // ── 3. 엣지 수집 ──────────────────────────────────────────────
@@ -382,6 +407,30 @@ function renderTree(preservedTransform) {
         if (!node.expanded) ng.select("rect").style("stroke-dasharray", "4,3");
 
         _setupInteractions(ng, tag);
+
+        // X 버튼 (노드 삭제)
+        const delBtn = ng.append("g")
+            .attr("class", "node-del-btn")
+            .attr("transform", `translate(${w - 16}, 2)`);
+        delBtn.append("rect")
+            .attr("width", 14).attr("height", 14)
+            .attr("rx", 3)
+            .attr("fill", "#e53935");
+        delBtn.append("text")
+            .attr("x", 7).attr("y", 10.5)
+            .attr("text-anchor", "middle")
+            .attr("fill", "#fff")
+            .attr("font-size", "11px")
+            .attr("font-weight", "700")
+            .attr("pointer-events", "none")
+            .text("×");
+        delBtn.on("pointerdown.del", (e) => e.stopPropagation())
+              .on("click.del", (e) => { e.stopPropagation(); deleteNode(tag); });
+        if (_hasHover) {
+            delBtn.style("display", "none");
+            ng.on("mouseenter.del", function() { d3.select(this).select(".node-del-btn").style("display", null); })
+              .on("mouseleave.del", function() { d3.select(this).select(".node-del-btn").style("display", "none"); });
+        }
     });
 
     if (preservedTransform) {
@@ -625,7 +674,7 @@ function addTagsBatch(tags) {
         fromRowsMap[base] = fromRows;
         fromRows.forEach(d => {
             const t = getBaseName(d["Equipment Tag(From)"]);
-            if (t && t !== base && !nodeMap[t] && !allFromTags.includes(t)) {
+            if (t && t !== base && !nodeMap[t] && !allFromTags.includes(t) && (showSpare || !/spare/i.test(t))) {
                 allFromTags.push(t);
             }
         });
@@ -667,9 +716,11 @@ function _addSingleWithConnections(base) {
     const fromRows = powerData.filter(d => getBaseName(d["Equipment Tag(To)"])   === base);
     const toRows   = powerData.filter(d => getBaseName(d["Equipment Tag(From)"]) === base);
     const fromTags = [...new Set(fromRows.map(d => getBaseName(d["Equipment Tag(From)"])))]
-        .filter(t => t && t !== base && !nodeMap[t]);
+        .filter(t => t && t !== base && !nodeMap[t])
+        .filter(t => showSpare || !/spare/i.test(t));
     const toTags   = [...new Set(toRows.map(d => getBaseName(d["Equipment Tag(To)"])))]
-        .filter(t => t && t !== base && !nodeMap[t]);
+        .filter(t => t && t !== base && !nodeMap[t])
+        .filter(t => showSpare || !/spare/i.test(t));
 
     const mutualSet = new Set(fromTags.filter(t => toTags.includes(t)));
     const onlyFrom  = fromTags.filter(t => !mutualSet.has(t));
@@ -901,11 +952,22 @@ document.addEventListener("DOMContentLoaded", () => {
         if (el.style.display === "none") return;
         if (!el.contains(e.target)) closeNodeModal();
     });
+
+    // PC: Delete 키로 마지막 선택 노드 삭제
+    if (_hasHover) {
+        document.addEventListener("keydown", (e) => {
+            if (e.key !== "Delete") return;
+            const activeEl = document.activeElement;
+            if (activeEl && (activeEl.tagName === "INPUT" || activeEl.tagName === "TEXTAREA")) return;
+            if (_lastSelectedTag) deleteNode(_lastSelectedTag);
+        });
+    }
 });
 
 function showNodeInfo(tag) {
     const node = nodeMap[tag];
     if (!node) return;
+    _lastSelectedTag = tag;
 
     // 이 장비가 To(수전)일 때의 행만 수집
     const toRows = powerData.filter(d => getBaseName(d["Equipment Tag(To)"]) === tag);

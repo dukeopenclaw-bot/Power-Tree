@@ -230,6 +230,22 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 #searchInput::placeholder { color: #ADB5BD; }
 #searchInput:focus { border-color: var(--accent); box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25); }
 
+.filter-row {
+  padding: 5px 14px 7px;
+  border-bottom: 1px solid var(--sidebar-border);
+  background: #f8f9fa;
+}
+.filter-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-dim);
+  cursor: pointer;
+  user-select: none;
+}
+.filter-label input[type="checkbox"] { cursor: pointer; }
+
 #resultList {
   flex: 1;
   overflow-y: auto;
