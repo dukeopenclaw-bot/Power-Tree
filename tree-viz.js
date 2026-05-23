@@ -25,6 +25,7 @@ let _mobilePressTimer   = null;
 let _mobileLongFired    = false;
 let _mobileLastTapTag   = null;
 let _mobileLastTapTime  = 0;
+let _mobileTapX         = 0;
 
 // ── 유틸 ─────────────────────────────────────────────────────
 function nodeWidth(tag) {
@@ -108,7 +109,9 @@ function drawTree(targetTag) {
 function expandNode(tag) {
     const node = nodeMap[tag];
     if (!node || node.expanded) return;
-    node.expanded = true;
+    node.expanded     = true;
+    node.expandedUp   = true;
+    node.expandedDown = true;
 
     const fromRows = powerData.filter(d => getBaseName(d["Equipment Tag(To)"])   === tag);
     const toRows   = powerData.filter(d => getBaseName(d["Equipment Tag(From)"]) === tag);
@@ -146,6 +149,57 @@ function expandNode(tag) {
     const svg     = d3.select("#tree-svg");
     const current = svgZoom ? d3.zoomTransform(svg.node()) : null;
     renderTree(current);
+}
+
+// ── 2a. 방향별 확장 ───────────────────────────────────────────
+function expandNodeUpstream(tag) {
+    const node = nodeMap[tag];
+    if (!node || node.expandedUp) return;
+    node.expandedUp = true;
+
+    const fromRows    = powerData.filter(d => getBaseName(d["Equipment Tag(To)"]) === tag);
+    const newFromTags = [...new Set(fromRows.map(d => getBaseName(d["Equipment Tag(From)"])))]
+        .filter(t => t && t !== tag && !nodeMap[t]);
+
+    if (newFromTags.length > 0) {
+        const STEP = Math.max(...[...Object.keys(nodeMap), ...newFromTags].map(nodeWidth)) + H_GAP;
+        newFromTags.forEach((t, i) => {
+            nodeMap[t] = {
+                x: node.x + (i - (newFromTags.length - 1) / 2) * STEP,
+                y: node.y - V_GAP, type: "from", w: nodeWidth(t),
+                expanded: false, expandedUp: false, expandedDown: false
+            };
+        });
+        _collectEdges(fromRows, tag);
+    }
+    renderTree(svgZoom ? d3.zoomTransform(d3.select("#tree-svg").node()) : null);
+}
+
+function expandNodeDownstream(tag) {
+    const node = nodeMap[tag];
+    if (!node || node.expandedDown) return;
+    node.expandedDown = true;
+
+    const toRows    = powerData.filter(d => getBaseName(d["Equipment Tag(From)"]) === tag);
+    const newToTags = [...new Set(toRows.map(d => getBaseName(d["Equipment Tag(To)"])))]
+        .filter(t => t && t !== tag && !nodeMap[t]);
+
+    if (newToTags.length > 0) {
+        const STEP = Math.max(...[...Object.keys(nodeMap), ...newToTags].map(nodeWidth)) + H_GAP;
+        newToTags.forEach((t, i) => {
+            const row = Math.floor(i / colCount);
+            const col = i % colCount;
+            const rowCount = Math.min(newToTags.length - row * colCount, colCount);
+            nodeMap[t] = {
+                x: node.x - ((rowCount - 1) * STEP) / 2 + col * STEP,
+                y: node.y + V_GAP + row * (NODE_H + V_GAP * 0.6),
+                type: "to", w: nodeWidth(t),
+                expanded: false, expandedUp: false, expandedDown: false
+            };
+        });
+        _collectEdges(toRows, tag);
+    }
+    renderTree(svgZoom ? d3.zoomTransform(d3.select("#tree-svg").node()) : null);
 }
 
 // ── 3. 엣지 수집 ──────────────────────────────────────────────
@@ -329,19 +383,21 @@ function _bezier(fn, tn) {
 }
 
 // ── 6. 드래그 ────────────────────────────────────────────────
-function _dragStart() {
+function _dragStart(event) {
     _dragging = false;
     d3.select(this).raise().classed("active", true);
 
     if (!_hasHover) {
-        // 모바일: 롱프레스 타이머 시작
+        // 모바일: 탭 위치 저장 + 롱프레스 타이머 시작
         const tag = d3.select(this).attr("data-tag");
+        const src = event && event.sourceEvent;
+        _mobileTapX = src ? (src.touches ? src.touches[0].clientX : src.clientX) : 0;
         _mobileLongFired = false;
         if (_mobilePressTimer) clearTimeout(_mobilePressTimer);
         _mobilePressTimer = setTimeout(() => {
             _mobileLongFired = true;
             _mobilePressTimer = null;
-            setAsCenter(tag); // 색상만 즉시 변경 (re-render 없음)
+            setAsCenter(tag);
         }, 600);
     }
 }
@@ -390,11 +446,14 @@ function _dragEnd() {
             // 롱프레스 종료 → 확장
             if (tag && nodeMap[tag] && !nodeMap[tag].expanded) expandNode(tag);
         } else if (tag) {
-            // 탭 처리: 단일탭 → 툴팁, 더블탭 → 선택장비+확장
+            // 탭 처리: 단일탭 → 툴팁, 더블탭 좌/우 → 상위/하위 확장
             const now = Date.now();
             if (tag === _mobileLastTapTag && now - _mobileLastTapTime < 350) {
-                setAsCenter(tag);
-                if (nodeMap[tag] && !nodeMap[tag].expanded) expandNode(tag);
+                const nodeEl = document.querySelector(`g.node[data-tag="${tag}"]`);
+                const bbox   = nodeEl ? nodeEl.getBoundingClientRect() : null;
+                const isLeft = bbox ? _mobileTapX < bbox.left + bbox.width / 2 : true;
+                if (isLeft) expandNodeUpstream(tag);
+                else        expandNodeDownstream(tag);
                 _mobileLastTapTag  = null;
                 _mobileLastTapTime = 0;
             } else {
@@ -449,8 +508,10 @@ function _setupInteractions(sel, tag) {
         })
         .on("dblclick.interact", (event) => {
             event.stopPropagation();
-            setAsCenter(tag);
-            if (!nodeMap[tag].expanded) expandNode(tag);
+            const bbox   = sel.node().getBoundingClientRect();
+            const isLeft = event.clientX < bbox.left + bbox.width / 2;
+            if (isLeft) expandNodeUpstream(tag);
+            else        expandNodeDownstream(tag);
         });
     }
     // 모바일: _dragStart/_drag/_dragEnd 에서 탭/더블탭/롱프레스 처리
