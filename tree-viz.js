@@ -245,6 +245,52 @@ function applyPowerColors() {
             .classed("node-off", node.powered === false)
             .classed("node-on",  node.powered !== false);
     });
+    applyEdgeColors();
+}
+
+function applyEdgeColors() {
+    d3.selectAll(".link").each(function() {
+        const l       = d3.select(this);
+        const fromTag = l.attr("data-from");
+        const fn      = nodeMap[fromTag];
+        const powered = fn ? fn.powered !== false : true;
+        if (powered) {
+            l.style("stroke", "#e53935")
+             .style("stroke-width", "1.8")
+             .style("stroke-dasharray", null)
+             .style("stroke-opacity", "0.8")
+             .attr("marker-end", "url(#arr-on)");
+        } else {
+            l.style("stroke", "#9e9e9e")
+             .style("stroke-width", "1")
+             .style("stroke-dasharray", "5,4")
+             .style("stroke-opacity", "0.55")
+             .attr("marker-end", "url(#arr-off)");
+        }
+    });
+}
+
+function _highlightEdges(tag) {
+    d3.selectAll(".link").each(function() {
+        const l    = d3.select(this);
+        const isUp = l.attr("data-to")   === tag;
+        const isDn = l.attr("data-from") === tag;
+        if (isUp) {
+            l.style("stroke", "#1565c0")
+             .style("stroke-width", "3")
+             .style("stroke-dasharray", null)
+             .style("stroke-opacity", "1")
+             .attr("marker-end", "url(#arr-up)");
+        } else if (isDn) {
+            l.style("stroke", "#e65100")
+             .style("stroke-width", "3")
+             .style("stroke-dasharray", null)
+             .style("stroke-opacity", "1")
+             .attr("marker-end", "url(#arr-down)");
+        } else {
+            l.style("stroke-opacity", "0.15");
+        }
+    });
 }
 
 function toggleNodePower(tag) {
@@ -316,11 +362,19 @@ function renderTree(preservedTransform) {
         .on("zoom", e => g.attr("transform", e.transform));
     svg.call(svgZoom);
 
-    svg.append("defs").append("marker")
-        .attr("id", "arrowhead")
-        .attr("viewBox", "0 -5 10 10").attr("refX", 10).attr("refY", 0)
-        .attr("markerWidth", 6).attr("markerHeight", 6).attr("orient", "auto")
-        .append("path").attr("d", "M0,-5L10,0L0,5").attr("fill", "#546e7a");
+    const defs = svg.append("defs");
+    [
+        { id: "arr-on",   fill: "#e53935" },
+        { id: "arr-off",  fill: "#bdbdbd" },
+        { id: "arr-up",   fill: "#1565c0" },
+        { id: "arr-down", fill: "#e65100" },
+    ].forEach(({ id, fill }) => {
+        defs.append("marker")
+            .attr("id", id)
+            .attr("viewBox", "0 -5 10 10").attr("refX", 10).attr("refY", 0)
+            .attr("markerWidth", 6).attr("markerHeight", 6).attr("orient", "auto")
+            .append("path").attr("d", "M0,-5L10,0L0,5").attr("fill", fill);
+    });
 
     const edgeLayer  = g.append("g").attr("class", "links");
     const labelLayer = g.append("g").attr("class", "labels");
@@ -336,7 +390,7 @@ function renderTree(preservedTransform) {
             .attr("data-from", edge.fromTag)
             .attr("data-to",   edge.toTag)
             .attr("d", _bezier(fn, tn))
-            .attr("marker-end", "url(#arrowhead)");
+            .attr("marker-end", "url(#arr-on)");
 
         const sameLevel = Math.abs(fn.y - tn.y) < NODE_H * 1.5;
         const x1 = sameLevel ? fn.x + (tn.x > fn.x ?  fn.w/2+2 : -fn.w/2-2) : fn.x;
@@ -432,6 +486,8 @@ function renderTree(preservedTransform) {
               .on("mouseleave.del", function() { d3.select(this).select(".node-del-btn").style("display", "none"); });
         }
     });
+
+    applyEdgeColors();
 
     if (preservedTransform) {
         svg.call(svgZoom.transform, preservedTransform);
@@ -612,6 +668,9 @@ function _setupInteractions(sel, tag) {
             event.stopPropagation();
             toggleNodePower(tag);
         });
+        // 엣지 방향 강조 (호버 시)
+        sel.on("mouseenter.edge-hl", () => { if (!_dragging) _highlightEdges(tag); })
+           .on("mouseleave.edge-hl", () => { applyEdgeColors(); });
     }
     // 모바일: _dragStart/_drag/_dragEnd 에서 탭/더블탭/롱프레스 처리
 }
