@@ -175,8 +175,9 @@ function expandNodeUpstream(tag) {
                 expanded: false, expandedUp: false, expandedDown: false
             };
         });
-        _collectEdges(fromRows, tag);
     }
+    // 신규 노드 없어도 기존 노드와의 엣지 수집 (이미 표시된 상위 장비 연결)
+    _collectEdges(fromRows, tag);
     renderTree(svgZoom ? d3.zoomTransform(d3.select("#tree-svg").node()) : null);
 }
 
@@ -203,8 +204,9 @@ function expandNodeDownstream(tag) {
                 expanded: false, expandedUp: false, expandedDown: false
             };
         });
-        _collectEdges(toRows, tag);
     }
+    // 신규 노드 없어도 기존 노드와의 엣지 수집 (이미 표시된 하위 장비 연결)
+    _collectEdges(toRows, tag);
     renderTree(svgZoom ? d3.zoomTransform(d3.select("#tree-svg").node()) : null);
 }
 
