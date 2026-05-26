@@ -20,6 +20,8 @@ let svgZoom          = null;
 let _dragging        = false;
 let _tooltipHideTimer = null;
 
+let moveSubeq           = false;   // 상위 이동 시 하위 장치 동반 이동
+
 // ── 모바일 탭/롱프레스 전역 상태 ───────────────────────────────
 let _mobilePressTimer   = null;
 let _mobileLongFired    = false;
@@ -535,6 +537,22 @@ function _bezier(fn, tn) {
     return `M${x1},${y1} C${x1},${y1+dy} ${x2},${y2-dy} ${x2},${y2}`;
 }
 
+// 주어진 태그의 모든 하위 장치(edgeList 기준, nodeMap에 존재하는 것만) 반환
+function getAllDescendants(tag) {
+    const result = new Set();
+    const queue  = [tag];
+    while (queue.length > 0) {
+        const cur = queue.shift();
+        edgeList.forEach(e => {
+            if (e.fromTag === cur && nodeMap[e.toTag] && !result.has(e.toTag)) {
+                result.add(e.toTag);
+                queue.push(e.toTag);
+            }
+        });
+    }
+    return [...result];
+}
+
 // ── 6. 드래그 ────────────────────────────────────────────────
 function _dragStart(event) {
     _dragging = false;
@@ -561,21 +579,37 @@ function _drag(event) {
     const tag  = d3.select(this).attr("data-tag");
     const node = nodeMap[tag];
     if (!node) return;
+
+    const dx = event.dx, dy = event.dy;
     node.x = event.x + node.w / 2;
     node.y = event.y + NODE_H / 2;
     d3.select(this).attr("transform", `translate(${event.x}, ${event.y})`);
 
+    // move-subeq 켜진 경우: 하위 장치 전부 동반 이동
+    const movedTags = new Set([tag]);
+    if (moveSubeq) {
+        getAllDescendants(tag).forEach(descTag => {
+            const dn = nodeMap[descTag];
+            if (!dn) return;
+            dn.x += dx;
+            dn.y += dy;
+            movedTags.add(descTag);
+            d3.select(`g.node[data-tag="${descTag}"]`)
+              .attr("transform", `translate(${dn.x - dn.w / 2}, ${dn.y - NODE_H / 2})`);
+        });
+    }
+
     d3.selectAll(".link").each(function () {
         const l = d3.select(this);
         const fTag = l.attr("data-from"), tTag = l.attr("data-to");
-        if (fTag === tag || tTag === tag)
+        if (movedTags.has(fTag) || movedTags.has(tTag))
             l.attr("d", _bezier(nodeMap[fTag], nodeMap[tTag]));
     });
 
     d3.selectAll(".edge-labels").each(function () {
         const lg = d3.select(this);
         const fTag = lg.attr("data-from"), tTag = lg.attr("data-to");
-        if (fTag !== tag && tTag !== tag) return;
+        if (!movedTags.has(fTag) && !movedTags.has(tTag)) return;
         const fn = nodeMap[fTag], tn = nodeMap[tTag];
         if (!fn || !tn) return;
         const x1 = fn.x, y1 = fn.y + NODE_H / 2 + 2;

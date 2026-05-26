@@ -91,6 +91,11 @@
       <button title="열 줄이기" onclick="changeColCount(-2)">▼</button>
       <span id="col-count">4</span>
       <button title="열 늘리기" onclick="changeColCount(2)">▲</button>
+      <span class="toolbar-sep"></span>
+      <label class="toolbar-check" title="체크 시 상위 장치를 이동하면 하위 장치 전체가 같이 이동됩니다">
+        <input type="checkbox" id="chk-move-subeq" onchange="moveSubeq = this.checked">
+        <span>move-subeq</span>
+      </label>
     </div>
 
   </main>
