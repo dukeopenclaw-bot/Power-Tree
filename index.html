@@ -88,13 +88,13 @@
       <button title="저장 목록 불러오기" onclick="loadSavedViews()">📂</button>
       <span class="toolbar-sep"></span>
       <span class="col-label">열</span>
-      <button title="열 줄이기" onclick="changeColCount(-2)">▼</button>
+      <button title="열 줄이기" onclick="changeColCount(-1)">▼</button>
       <span id="col-count">4</span>
-      <button title="열 늘리기" onclick="changeColCount(2)">▲</button>
+      <button title="열 늘리기" onclick="changeColCount(1)">▲</button>
       <span class="toolbar-sep"></span>
-      <label class="toolbar-check" title="체크 시 상위 장치를 이동하면 하위 장치 전체가 같이 이동됩니다">
+      <label class="toolbar-check" title="하위 장치 동반 이동">
         <input type="checkbox" id="chk-move-subeq" onchange="setMoveSubeq(this.checked)">
-        <span>move-subeq</span>
+        <span>하위↕</span>
       </label>
     </div>
 

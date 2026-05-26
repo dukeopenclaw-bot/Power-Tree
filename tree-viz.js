@@ -540,12 +540,14 @@ function _bezier(fn, tn) {
 
 // 주어진 태그의 모든 하위 장치(edgeList 기준, nodeMap에 존재하는 것만) 반환
 function getAllDescendants(tag) {
-    const result = new Set();
-    const queue  = [tag];
+    const result  = new Set();
+    const visited = new Set([tag]);   // 시작 태그 자신은 결과에 포함하지 않음 (사이클 방지)
+    const queue   = [tag];
     while (queue.length > 0) {
         const cur = queue.shift();
         edgeList.forEach(e => {
-            if (e.fromTag === cur && nodeMap[e.toTag] && !result.has(e.toTag)) {
+            if (e.fromTag === cur && nodeMap[e.toTag] && !visited.has(e.toTag)) {
+                visited.add(e.toTag);
                 result.add(e.toTag);
                 queue.push(e.toTag);
             }
@@ -582,13 +584,15 @@ function _drag(event) {
     if (!node) return;
 
     const dx = event.dx, dy = event.dy;
-    node.x = event.x + node.w / 2;
-    node.y = event.y + NODE_H / 2;
-    d3.select(this).attr("transform", `translate(${event.x}, ${event.y})`);
 
-    // move-subeq 켜진 경우: 하위 장치 전부 동반 이동
-    const movedTags = new Set([tag]);
+    let movedTags;
     if (moveSubeq) {
+        // move-subeq: 상위 포함 전체를 증분 방식으로 이동 (상대 위치 유지)
+        node.x += dx;
+        node.y += dy;
+        d3.select(this).attr("transform", `translate(${node.x - node.w / 2}, ${node.y - NODE_H / 2})`);
+
+        movedTags = new Set([tag]);
         getAllDescendants(tag).forEach(descTag => {
             const dn = nodeMap[descTag];
             if (!dn) return;
@@ -598,6 +602,12 @@ function _drag(event) {
             d3.select(`g.node[data-tag="${descTag}"]`)
               .attr("transform", `translate(${dn.x - dn.w / 2}, ${dn.y - NODE_H / 2})`);
         });
+    } else {
+        // 기존 단일 노드 드래그
+        node.x = event.x + node.w / 2;
+        node.y = event.y + NODE_H / 2;
+        d3.select(this).attr("transform", `translate(${event.x}, ${event.y})`);
+        movedTags = new Set([tag]);
     }
 
     d3.selectAll(".link").each(function () {
@@ -715,10 +725,9 @@ function _setupInteractions(sel, tag) {
 // ── 9. 열 수 조절 ────────────────────────────────────────────
 function changeColCount(delta) {
     const next = colCount + delta;
-    if (next < 2) return;
+    if (next < 1) return;
     colCount = next;
     document.getElementById("col-count").textContent = colCount;
-    if (tgt) drawTree(tgt);
 }
 
 // ── 11. 트리에 태그 일괄 추가 (6열 그리드 배치) ─────────────────
