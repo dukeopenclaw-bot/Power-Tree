@@ -1107,6 +1107,129 @@ function showNodeInfo(tag) {
     requestAnimationFrame(() => _positionTooltip(tag));
 }
 
+// ── 뷰 저장/불러오기 ─────────────────────────────────────────────
+let _savedViews = [];
+
+async function saveCurrentView() {
+    if (Object.keys(nodeMap).length === 0) {
+        alert("저장할 트리가 없습니다.");
+        return;
+    }
+    const name = prompt("저장 이름을 입력하세요:", `저장_${new Date().toLocaleDateString('ko-KR')}`);
+    if (!name) return;
+
+    const svgEl = document.getElementById("tree-svg");
+    const tr    = svgZoom ? d3.zoomTransform(svgEl) : null;
+    const state = {
+        nodeMap:   nodeMap,
+        edgeList:  edgeList,
+        colCount:  colCount,
+        tgt:       tgt,
+        transform: tr ? { k: tr.k, x: tr.x, y: tr.y } : null
+    };
+
+    showStatus("💾 저장 중...", "loading");
+    try {
+        await fetch(GAS_URL, {
+            method:  "POST",
+            mode:    "no-cors",
+            headers: { "Content-Type": "text/plain;charset=UTF-8" },
+            body:    JSON.stringify({ action: "save", name, data: JSON.stringify(state) }),
+            redirect: "follow"
+        });
+        showStatus(`✅ "${name}" 저장 완료`, "success");
+        setTimeout(hideStatus, 3000);
+    } catch (err) {
+        showStatus("❌ 저장 실패: " + err.message, "error");
+    }
+}
+
+async function loadSavedViews() {
+    showStatus("⚡ 목록 로딩 중...", "loading");
+    try {
+        const res = await fetch(GAS_URL + "?action=loadViews", { redirect: "follow" });
+        _savedViews = await res.json();
+        hideStatus();
+        _showViewModal();
+    } catch (err) {
+        showStatus("❌ 불러오기 실패: " + err.message, "error");
+    }
+}
+
+function _showViewModal() {
+    const modal = document.getElementById("view-modal");
+    const list  = document.getElementById("view-modal-list");
+    if (!modal || !list) return;
+
+    if (!_savedViews.length) {
+        list.innerHTML = '<li class="view-empty">저장된 화면이 없습니다</li>';
+    } else {
+        list.innerHTML = _savedViews.map((v, i) => `
+            <li class="view-item" data-idx="${i}">
+                <div class="view-info">
+                    <span class="view-name">${esc(v.name)}</span>
+                    <span class="view-time">${_fmtTime(v.timestamp)}</span>
+                </div>
+                <button class="view-del" data-idx="${i}">🗑</button>
+            </li>`).join("");
+
+        list.querySelectorAll(".view-info").forEach(el => {
+            el.addEventListener("click", () => restoreView(_savedViews[+el.closest("li").dataset.idx].data));
+        });
+        list.querySelectorAll(".view-del").forEach(el => {
+            el.addEventListener("click", () => deleteSavedView(+el.dataset.idx, el.closest("li")));
+        });
+    }
+    modal.style.display = "flex";
+}
+
+function closeViewModal() {
+    const modal = document.getElementById("view-modal");
+    if (modal) modal.style.display = "none";
+}
+
+function restoreView(dataJson) {
+    try {
+        const state = JSON.parse(dataJson);
+        nodeMap  = state.nodeMap  || {};
+        edgeList = state.edgeList || [];
+        colCount = state.colCount || 4;
+        tgt      = state.tgt      || "";
+        document.getElementById("col-count").textContent = colCount;
+        const hint = document.getElementById("hint");
+        if (hint) hint.classList.add("hidden");
+        const tr = state.transform;
+        const preserved = tr ? d3.zoomIdentity.translate(tr.x, tr.y).scale(tr.k) : null;
+        closeViewModal();
+        renderTree(preserved);
+    } catch (err) {
+        alert("복원 실패: " + err.message);
+    }
+}
+
+async function deleteSavedView(idx, liEl) {
+    const view = _savedViews[idx];
+    if (!view || !confirm(`"${view.name}" 을 삭제할까요?`)) return;
+    liEl.remove();
+    _savedViews.splice(idx, 1);
+    try {
+        await fetch(GAS_URL, {
+            method:  "POST",
+            mode:    "no-cors",
+            headers: { "Content-Type": "text/plain;charset=UTF-8" },
+            body:    JSON.stringify({ action: "delete", name: view.name }),
+            redirect: "follow"
+        });
+    } catch (err) { /* 무시 — UI에서는 이미 제거됨 */ }
+}
+
+function _fmtTime(ts) {
+    if (!ts) return "";
+    try {
+        return new Date(ts).toLocaleString('ko-KR', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
+    } catch { return ts; }
+}
+
 function closeNodeModal() {
     const el = document.getElementById("node-tooltip");
     if (el) el.style.display = "none";

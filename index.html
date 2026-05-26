@@ -30,7 +30,7 @@
       <div class="sidebar-header">
         <div class="sidebar-title">
           <h1>Power Tree</h1>
-          <span class="version">V4.9</span>
+          <span class="version">V5.0</span>
         </div>
         <button id="btn-reset" onclick="resetTree()" title="초기화">↺</button>
       </div>
@@ -84,6 +84,9 @@
       <button title="화면 맞춤" onclick="zoomFit()">⊙</button>
       <button title="자동 정렬" onclick="autoLayout()" id="btn-layout">⊞</button>
       <span class="toolbar-sep"></span>
+      <button title="현재 화면 저장" onclick="saveCurrentView()">💾</button>
+      <button title="저장 목록 불러오기" onclick="loadSavedViews()">📂</button>
+      <span class="toolbar-sep"></span>
       <span class="col-label">열</span>
       <button title="열 줄이기" onclick="changeColCount(-2)">▼</button>
       <span id="col-count">4</span>
@@ -92,6 +95,18 @@
 
   </main>
 
+</div>
+
+<!-- 저장 뷰 모달 -->
+<div id="view-modal" style="display:none">
+  <div id="view-modal-backdrop" onclick="closeViewModal()"></div>
+  <div id="view-modal-content">
+    <div id="view-modal-header">
+      <span>저장된 화면</span>
+      <button onclick="closeViewModal()">✕</button>
+    </div>
+    <ul id="view-modal-list"></ul>
+  </div>
 </div>
 
 <!-- 노드 정보 툴팁 (body 직속 → #app overflow:hidden 영향 없음) -->
