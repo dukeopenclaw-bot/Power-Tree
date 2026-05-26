@@ -21,6 +21,7 @@ let _dragging        = false;
 let _tooltipHideTimer = null;
 
 let moveSubeq           = false;   // 상위 이동 시 하위 장치 동반 이동
+function setMoveSubeq(val) { moveSubeq = val; }
 
 // ── 모바일 탭/롱프레스 전역 상태 ───────────────────────────────
 let _mobilePressTimer   = null;
