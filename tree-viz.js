@@ -829,13 +829,15 @@ function setAsCenter(tag) {
     // expandNode는 더블클릭/더블탭에서만 호출 (단일 클릭 시 확장 안 함)
 }
 
-// ── 12. 자동 레이아웃 (레벨별 짝수열 다단 그리드 배치) ──────────
+// ── 12. 자동 레이아웃 (계층형 - 다중 공급원 중앙 배치) ────────────
 function autoLayout() {
     const tags = Object.keys(nodeMap);
-    if (tags.length === 0) return;
+    if (!tags.length) return;
 
-    const container  = document.getElementById("canvas-container");
-    const containerW = container.clientWidth || 800;
+    const containerW = document.getElementById("canvas-container").clientWidth || 800;
+    const cellW      = Math.max(...tags.map(nodeWidth)) + H_GAP;
+    const LEVEL_H    = NODE_H + V_GAP;
+    const COMP_GAP   = cellW * 1.5;
 
     // 방향 그래프 구축
     const ch = {}, pa = {};
@@ -848,83 +850,106 @@ function autoLayout() {
     });
 
     // 무방향 BFS로 연결 컴포넌트 탐색
-    const seen = new Set();
+    const seenComp = new Set();
     const components = [];
     tags.forEach(start => {
-        if (seen.has(start)) return;
+        if (seenComp.has(start)) return;
         const comp = [], q = [start];
         while (q.length) {
             const n = q.shift();
-            if (seen.has(n)) continue;
-            seen.add(n); comp.push(n);
-            [...ch[n], ...pa[n]].forEach(x => { if (!seen.has(x)) q.push(x); });
+            if (seenComp.has(n)) continue;
+            seenComp.add(n); comp.push(n);
+            [...ch[n], ...pa[n]].forEach(x => { if (!seenComp.has(x)) q.push(x); });
         }
         components.push(comp);
     });
 
-    const LEVEL_H  = NODE_H + V_GAP;
-    const COMP_GAP = 80;   // 컴포넌트 간격
-    let globalX    = 0;
+    let globalX = 0;
 
     components.forEach(comp => {
-        // 루트 노드 (컴포넌트 내 부모 없는 노드)
+        // 루트 노드 탐색 (컴포넌트 내 부모 없는 노드)
         const roots = comp.filter(t => !pa[t].some(p => comp.includes(p)));
-        const startRoots = roots.length ? roots : [comp[0]];
+        const startNodes = roots.length ? roots : [comp[0]];
 
-        // BFS로 각 노드의 레벨 할당
-        const level = {};
-        const bfsQ  = [...startRoots];
-        startRoots.forEach(r => { level[r] = 0; });
-        const visited = new Set(startRoots);
+        // BFS 레벨 할당 (여러 경로가 있으면 더 깊은 레벨 우선)
+        const lv = {};
+        startNodes.forEach(r => { lv[r] = 0; });
+        const bfsQ = [...startNodes];
+        const visited = new Set(startNodes);
         while (bfsQ.length) {
             const n = bfsQ.shift();
-            ch[n].filter(c => comp.includes(c) && !visited.has(c)).forEach(c => {
-                visited.add(c);
-                level[c] = level[n] + 1;
-                bfsQ.push(c);
+            ch[n].filter(c => comp.includes(c)).forEach(c => {
+                const nl = lv[n] + 1;
+                if (!visited.has(c)) { visited.add(c); lv[c] = nl; bfsQ.push(c); }
+                else if (nl > lv[c])  { lv[c] = nl; }  // 더 깊은 레벨로 갱신
             });
         }
-        // 미방문 노드(사이클 등) → 레벨 0
-        comp.filter(t => level[t] === undefined).forEach(t => { level[t] = 0; });
+        comp.filter(t => lv[t] === undefined).forEach(t => { lv[t] = 0; });
 
-        // 레벨별 그룹화
-        const maxLevel = Math.max(...comp.map(t => level[t]));
-        const groups   = Array.from({ length: maxLevel + 1 }, () => []);
-        comp.forEach(t => groups[level[t]].push(t));
+        const maxLv = Math.max(...comp.map(t => lv[t]));
+        const byLv  = Array.from({ length: maxLv + 1 }, () => []);
+        comp.forEach(t => byLv[lv[t]].push(t));
 
-        // 컴포넌트 격자 열 수: colCount(짝수) 기준, 최대 해당 레벨 노드 수
-        const maxInLevel   = Math.max(...groups.map(g => g.length));
-        const compCols     = Math.min(maxInLevel, colCount);
-        const cellW        = Math.max(...comp.map(nodeWidth)) + H_GAP;
-        const compWidth    = compCols * cellW;
-
-        let yPos = 0;
-        groups.forEach(grp => {
-            const nCols = Math.min(grp.length, compCols);
-            const nRows = Math.ceil(grp.length / nCols);
-
-            grp.forEach((t, i) => {
-                const row  = Math.floor(i / nCols);
-                const col  = i % nCols;
-                const nodesInRow = Math.min(grp.length - row * nCols, nCols);
-                // 짧은 행은 컴포넌트 중앙 정렬
-                const leftPad = (compWidth - nodesInRow * cellW) / 2;
-                nodeMap[t].x = globalX + leftPad + col * cellW + cellW / 2;
-                nodeMap[t].y = yPos + row * LEVEL_H;
-            });
-
-            yPos += nRows * LEVEL_H;
+        // ── 하향 패스: 각 노드 X = 부모들의 X 평균 ─────────────────
+        // 루트 레벨: 균등 배치
+        byLv[0].sort((a, b) => a.localeCompare(b));
+        byLv[0].forEach((t, i) => {
+            nodeMap[t].x = i * cellW;
+            nodeMap[t].y = 0;
         });
 
-        globalX += compWidth + COMP_GAP;
+        for (let l = 1; l <= maxLv; l++) {
+            byLv[l].forEach(t => {
+                const pars = pa[t].filter(p => comp.includes(p));
+                nodeMap[t].x = pars.length
+                    ? pars.reduce((s, p) => s + nodeMap[p].x, 0) / pars.length
+                    : 0;
+                nodeMap[t].y = l * LEVEL_H;
+            });
+            _layoutResolveOverlap(byLv[l], cellW);
+        }
+
+        // ── 상향 패스: 부모 X = 자식들의 X 평균 (균형 조정) ─────────
+        for (let l = maxLv - 1; l >= 0; l--) {
+            byLv[l].forEach(t => {
+                const kids = ch[t].filter(c => comp.includes(c));
+                if (kids.length) {
+                    nodeMap[t].x = kids.reduce((s, c) => s + nodeMap[c].x, 0) / kids.length;
+                }
+            });
+            _layoutResolveOverlap(byLv[l], cellW);
+        }
+
+        // 컴포넌트를 globalX 기준으로 이동
+        const minX = Math.min(...comp.map(t => nodeMap[t].x - nodeMap[t].w / 2));
+        const shift = globalX - minX;
+        comp.forEach(t => { nodeMap[t].x += shift; });
+        const maxX = Math.max(...comp.map(t => nodeMap[t].x + nodeMap[t].w / 2));
+        globalX = maxX + COMP_GAP;
     });
 
-    // 전체 캔버스 수평 중앙 정렬
+    // 전체 캔버스 수평 중앙 정렬 + 상단 여백
     const allX    = tags.flatMap(t => [nodeMap[t].x - nodeMap[t].w / 2, nodeMap[t].x + nodeMap[t].w / 2]);
     const offsetX = containerW / 2 - (Math.min(...allX) + Math.max(...allX)) / 2;
     tags.forEach(t => { nodeMap[t].x += offsetX; nodeMap[t].y += 80; });
 
     renderTree(null);
+}
+
+// 같은 레벨 노드 겹침 해소 (정렬 후 앞뒤로 밀어냄)
+function _layoutResolveOverlap(group, cellW) {
+    if (group.length <= 1) return;
+    group.sort((a, b) => nodeMap[a].x - nodeMap[b].x);
+    // 앞에서 뒤로: 겹치면 오른쪽으로 밀기
+    for (let i = 1; i < group.length; i++) {
+        if (nodeMap[group[i]].x < nodeMap[group[i - 1]].x + cellW)
+            nodeMap[group[i]].x = nodeMap[group[i - 1]].x + cellW;
+    }
+    // 뒤에서 앞으로: 공간 있으면 왼쪽으로 당기기 (균형 유지)
+    for (let i = group.length - 2; i >= 0; i--) {
+        if (nodeMap[group[i]].x > nodeMap[group[i + 1]].x - cellW)
+            nodeMap[group[i]].x = nodeMap[group[i + 1]].x - cellW;
+    }
 }
 
 
