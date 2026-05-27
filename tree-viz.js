@@ -953,10 +953,11 @@ function autoLayout() {
         });
 
         for (let l = 1; l <= maxLv; l++) {
-            // 직계 부모(레벨 l-1)별로 그룹화
+            // 직계 부모(레벨 l-1)별로 그룹화, 없으면 가장 가까운 부모로 fallback
             const groups = new Map();
             byLv[l].forEach(t => {
-                const par = pa[t].find(p => comp.includes(p) && lv[p] === l - 1);
+                const par = pa[t].find(p => comp.includes(p) && lv[p] === l - 1)
+                         ?? pa[t].find(p => comp.includes(p));
                 const key = par ?? '__none';
                 if (!groups.has(key)) groups.set(key, []);
                 groups.get(key).push(t);
