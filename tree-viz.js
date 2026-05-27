@@ -953,7 +953,7 @@ function autoLayout() {
         });
 
         for (let l = 1; l <= maxLv; l++) {
-            // 직계 부모(레벨 l-1)별로 그룹화, 없으면 가장 가까운 부모로 fallback
+            // 부모별 그룹화
             const groups = new Map();
             byLv[l].forEach(t => {
                 const par = pa[t].find(p => comp.includes(p) && lv[p] === l - 1)
@@ -963,58 +963,39 @@ function autoLayout() {
                 groups.get(key).push(t);
             });
 
-            groups.forEach((kids, parentKey) => {
+            // 부모 X 좌→우 순으로 그룹 정렬 (같은 X면 이름순)
+            const sortedGroups = [...groups.entries()].sort((a, b) => {
+                const xa = (a[0] !== '__none' && nodeMap[a[0]]) ? nodeMap[a[0]].x : 0;
+                const xb = (b[0] !== '__none' && nodeMap[b[0]]) ? nodeMap[b[0]].x : 0;
+                return xa !== xb ? xa - xb : String(a[0]).localeCompare(String(b[0]));
+            });
+
+            // 각 그룹을 부모 중앙 아래에 순서대로 배치 (겹치면 오른쪽으로 이동)
+            let curRight = null;
+            sortedGroups.forEach(([parentKey, kids]) => {
                 const px = (parentKey !== '__none' && nodeMap[parentKey]) ? nodeMap[parentKey].x : 0;
+                const rowCount0 = Math.min(kids.length, colCount);
+                const idealLeft = px - (rowCount0 - 1) * cellW / 2;
+                const startX = curRight === null ? idealLeft : Math.max(idealLeft, curRight);
+
                 kids.forEach((t, i) => {
-                    const row      = Math.floor(i / colCount);
-                    const col      = i % colCount;
-                    const rowCount = Math.min(kids.length - row * colCount, colCount);
-                    nodeMap[t].x   = px - ((rowCount - 1) * cellW) / 2 + col * cellW;
-                    nodeMap[t].y   = levelY[l] + row * (NODE_H + V_GAP * 0.6);
+                    const row = Math.floor(i / colCount);
+                    const col = i % colCount;
+                    nodeMap[t].x = startX + col * cellW;
+                    nodeMap[t].y = levelY[l] + row * (NODE_H + V_GAP * 0.6);
                 });
-            });
 
-            // 같은 y 행에서 부모 그룹 단위로 겹침 해소 (개별 노드 뒤섞기 방지)
-            const byY = new Map();
-            groups.forEach((kids, parentKey) => {
-                kids.forEach(t => {
-                    const y = Math.round(nodeMap[t].y);
-                    if (!byY.has(y)) byY.set(y, new Map());
-                    if (!byY.get(y).has(parentKey)) byY.get(y).set(parentKey, []);
-                    byY.get(y).get(parentKey).push(t);
-                });
-            });
-            byY.forEach(parentGroupsAtY => {
-                // 부모 그룹을 블록으로 취급, 블록 단위로 밀어내기
-                const blocks = [...parentGroupsAtY.values()].map(nodes => {
-                    const xs = nodes.map(t => nodeMap[t].x);
-                    return { nodes,
-                             left:  Math.min(...xs) - cellW / 2,
-                             right: Math.max(...xs) + cellW / 2,
-                             cx:   (Math.min(...xs) + Math.max(...xs)) / 2 };
-                }).sort((a, b) => a.cx - b.cx);
-
-                // 앞→뒤: 겹치면 오른쪽으로 블록 통째로 이동
-                for (let i = 1; i < blocks.length; i++) {
-                    const overlap = blocks[i - 1].right - blocks[i].left;
-                    if (overlap > 0) {
-                        blocks[i].nodes.forEach(t => { nodeMap[t].x += overlap; });
-                        blocks[i].left  += overlap;
-                        blocks[i].right += overlap;
-                        blocks[i].cx    += overlap;
-                    }
-                }
+                curRight = startX + (rowCount0 - 1) * cellW + cellW / 2 + H_GAP;
             });
         }
 
-        // ── 상향 패스: 부모 X = 자식 첫 행 중앙 (균형 조정) ────────
+        // ── 상향 패스: 부모 X = 자식 범위 중앙 (균형 조정) ─────────
         for (let l = maxLv - 1; l >= 0; l--) {
             byLv[l].forEach(t => {
                 const kids = ch[t].filter(c => comp.includes(c));
                 if (kids.length) {
-                    // 첫 행(row=0)의 자식들 중앙을 부모 위치로
-                    const firstRow = kids.slice(0, colCount);
-                    nodeMap[t].x = firstRow.reduce((s, c) => s + nodeMap[c].x, 0) / firstRow.length;
+                    const xs = kids.map(c => nodeMap[c].x);
+                    nodeMap[t].x = (Math.min(...xs) + Math.max(...xs)) / 2;
                 }
             });
             _layoutResolveOverlap(byLv[l], cellW);
