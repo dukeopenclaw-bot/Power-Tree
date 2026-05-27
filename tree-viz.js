@@ -974,22 +974,47 @@ function autoLayout() {
                 });
             });
 
-            // 같은 y의 노드끼리만 겹침 해소
+            // 같은 y 행에서 부모 그룹 단위로 겹침 해소 (개별 노드 뒤섞기 방지)
             const byY = new Map();
-            byLv[l].forEach(t => {
-                const y = Math.round(nodeMap[t].y);
-                if (!byY.has(y)) byY.set(y, []);
-                byY.get(y).push(t);
+            groups.forEach((kids, parentKey) => {
+                kids.forEach(t => {
+                    const y = Math.round(nodeMap[t].y);
+                    if (!byY.has(y)) byY.set(y, new Map());
+                    if (!byY.get(y).has(parentKey)) byY.get(y).set(parentKey, []);
+                    byY.get(y).get(parentKey).push(t);
+                });
             });
-            byY.forEach(sameRow => _layoutResolveOverlap(sameRow, cellW));
+            byY.forEach(parentGroupsAtY => {
+                // 부모 그룹을 블록으로 취급, 블록 단위로 밀어내기
+                const blocks = [...parentGroupsAtY.values()].map(nodes => {
+                    const xs = nodes.map(t => nodeMap[t].x);
+                    return { nodes,
+                             left:  Math.min(...xs) - cellW / 2,
+                             right: Math.max(...xs) + cellW / 2,
+                             cx:   (Math.min(...xs) + Math.max(...xs)) / 2 };
+                }).sort((a, b) => a.cx - b.cx);
+
+                // 앞→뒤: 겹치면 오른쪽으로 블록 통째로 이동
+                for (let i = 1; i < blocks.length; i++) {
+                    const overlap = blocks[i - 1].right - blocks[i].left;
+                    if (overlap > 0) {
+                        blocks[i].nodes.forEach(t => { nodeMap[t].x += overlap; });
+                        blocks[i].left  += overlap;
+                        blocks[i].right += overlap;
+                        blocks[i].cx    += overlap;
+                    }
+                }
+            });
         }
 
-        // ── 상향 패스: 부모 X = 자식들의 X 평균 (균형 조정) ─────────
+        // ── 상향 패스: 부모 X = 자식 첫 행 중앙 (균형 조정) ────────
         for (let l = maxLv - 1; l >= 0; l--) {
             byLv[l].forEach(t => {
                 const kids = ch[t].filter(c => comp.includes(c));
                 if (kids.length) {
-                    nodeMap[t].x = kids.reduce((s, c) => s + nodeMap[c].x, 0) / kids.length;
+                    // 첫 행(row=0)의 자식들 중앙을 부모 위치로
+                    const firstRow = kids.slice(0, colCount);
+                    nodeMap[t].x = firstRow.reduce((s, c) => s + nodeMap[c].x, 0) / firstRow.length;
                 }
             });
             _layoutResolveOverlap(byLv[l], cellW);
