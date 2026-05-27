@@ -990,15 +990,72 @@ function autoLayout() {
         }
 
         // ── 상향 패스: 부모 X = 자식 범위 중앙 (균형 조정) ─────────
-        for (let l = maxLv - 1; l >= 0; l--) {
-            byLv[l].forEach(t => {
-                const kids = ch[t].filter(c => comp.includes(c));
-                if (kids.length) {
-                    const xs = kids.map(c => nodeMap[c].x);
-                    nodeMap[t].x = (Math.min(...xs) + Math.max(...xs)) / 2;
+        function _upwardPass() {
+            for (let l = maxLv - 1; l >= 0; l--) {
+                byLv[l].forEach(t => {
+                    const kids = ch[t].filter(c => comp.includes(c));
+                    if (kids.length) {
+                        const xs = kids.map(c => nodeMap[c].x);
+                        nodeMap[t].x = (Math.min(...xs) + Math.max(...xs)) / 2;
+                    }
+                });
+                _layoutResolveOverlap(byLv[l], cellW);
+            }
+        }
+        _upwardPass();
+
+        // ── 보정 패스: 멀리 배치된 자식 그룹을 부모 방향으로 당기기 ──
+        for (let iter = 0; iter < 5; iter++) {
+            let anyMoved = false;
+
+            for (let l = 1; l <= maxLv; l++) {
+                // 레벨 l의 노드를 부모별 그룹화
+                const gMap = new Map();
+                byLv[l].forEach(t => {
+                    const par = pa[t].find(p => comp.includes(p) && lv[p] === l - 1)
+                             ?? pa[t].find(p => comp.includes(p));
+                    const key = par ?? null;
+                    if (!gMap.has(key)) gMap.set(key, { pk: key, kids: [] });
+                    gMap.get(key).kids.push(t);
+                });
+
+                // 현재 X 기준으로 정렬 (이웃 판단용)
+                const grps = [...gMap.values()].map(g => {
+                    const xs = g.kids.map(k => nodeMap[k].x);
+                    const minX = Math.min(...xs), maxX = Math.max(...xs);
+                    return { pk: g.pk, kids: g.kids,
+                             minX: minX - cellW / 2, maxX: maxX + cellW / 2,
+                             cx: (minX + maxX) / 2 };
+                }).sort((a, b) => a.cx - b.cx);
+
+                for (let i = 0; i < grps.length; i++) {
+                    const g = grps[i];
+                    if (!g.pk || !nodeMap[g.pk]) continue;
+                    const target = nodeMap[g.pk].x;
+                    let shift = target - g.cx;
+                    if (Math.abs(shift) < 1) continue;
+
+                    // 왼쪽 이웃과 겹치지 않도록 제한
+                    if (shift < 0 && i > 0) {
+                        const allowed = grps[i - 1].maxX + H_GAP;
+                        if (g.minX + shift < allowed) shift = allowed - g.minX;
+                    }
+                    // 오른쪽 이웃과 겹치지 않도록 제한
+                    if (shift > 0 && i < grps.length - 1) {
+                        const allowed = grps[i + 1].minX - H_GAP;
+                        if (g.maxX + shift > allowed) shift = allowed - g.maxX;
+                    }
+
+                    if (Math.abs(shift) < 1) continue;
+                    g.kids.forEach(k => { nodeMap[k].x += shift; });
+                    g.minX += shift; g.maxX += shift; g.cx += shift;
+                    anyMoved = true;
                 }
-            });
-            _layoutResolveOverlap(byLv[l], cellW);
+            }
+
+            // 부모 위치 재조정
+            _upwardPass();
+            if (!anyMoved) break;
         }
 
         // 컴포넌트를 globalX 기준으로 이동
