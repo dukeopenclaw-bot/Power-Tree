@@ -934,8 +934,18 @@ function autoLayout() {
         const byLv  = Array.from({ length: maxLv + 1 }, () => []);
         comp.forEach(t => byLv[lv[t]].push(t));
 
-        // ── 하향 패스: 각 노드 X = 부모들의 X 평균 ─────────────────
-        // 루트 레벨: 균등 배치
+        // colCount 행 수를 반영한 레벨별 실제 Y 시작 위치
+        const levelY = [0];
+        for (let l = 1; l <= maxLv; l++) {
+            let maxRows = 1;
+            byLv[l - 1].forEach(pTag => {
+                const kids = ch[pTag].filter(c => comp.includes(c) && lv[c] === l);
+                if (kids.length) maxRows = Math.max(maxRows, Math.ceil(kids.length / colCount));
+            });
+            levelY.push(levelY[l - 1] + (maxRows - 1) * (NODE_H + V_GAP * 0.6) + LEVEL_H);
+        }
+
+        // ── 하향 패스: 부모별 colCount 그리드 배치 ─────────────────
         byLv[0].sort((a, b) => a.localeCompare(b));
         byLv[0].forEach((t, i) => {
             nodeMap[t].x = i * cellW;
@@ -943,14 +953,34 @@ function autoLayout() {
         });
 
         for (let l = 1; l <= maxLv; l++) {
+            // 직계 부모(레벨 l-1)별로 그룹화
+            const groups = new Map();
             byLv[l].forEach(t => {
-                const pars = pa[t].filter(p => comp.includes(p));
-                nodeMap[t].x = pars.length
-                    ? pars.reduce((s, p) => s + nodeMap[p].x, 0) / pars.length
-                    : 0;
-                nodeMap[t].y = l * LEVEL_H;
+                const par = pa[t].find(p => comp.includes(p) && lv[p] === l - 1);
+                const key = par ?? '__none';
+                if (!groups.has(key)) groups.set(key, []);
+                groups.get(key).push(t);
             });
-            _layoutResolveOverlap(byLv[l], cellW);
+
+            groups.forEach((kids, parentKey) => {
+                const px = (parentKey !== '__none' && nodeMap[parentKey]) ? nodeMap[parentKey].x : 0;
+                kids.forEach((t, i) => {
+                    const row      = Math.floor(i / colCount);
+                    const col      = i % colCount;
+                    const rowCount = Math.min(kids.length - row * colCount, colCount);
+                    nodeMap[t].x   = px - ((rowCount - 1) * cellW) / 2 + col * cellW;
+                    nodeMap[t].y   = levelY[l] + row * (NODE_H + V_GAP * 0.6);
+                });
+            });
+
+            // 같은 y의 노드끼리만 겹침 해소
+            const byY = new Map();
+            byLv[l].forEach(t => {
+                const y = Math.round(nodeMap[t].y);
+                if (!byY.has(y)) byY.set(y, []);
+                byY.get(y).push(t);
+            });
+            byY.forEach(sameRow => _layoutResolveOverlap(sameRow, cellW));
         }
 
         // ── 상향 패스: 부모 X = 자식들의 X 평균 (균형 조정) ─────────
