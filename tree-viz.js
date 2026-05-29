@@ -945,117 +945,65 @@ function autoLayout() {
             levelY.push(levelY[l - 1] + (maxRows - 1) * (NODE_H + V_GAP * 0.6) + LEVEL_H);
         }
 
-        // ── 하향 패스: 부모별 colCount 그리드 배치 ─────────────────
+        // ── Phase 1: 서브트리 너비 계산 (하→상) ────────────────────
+        // 각 노드의 전체 하위 서브트리를 colCount 그리드로 펼칠 때 필요한 최소 너비
+        const stW = {};
+        for (let l = maxLv; l >= 0; l--) {
+            byLv[l].forEach(t => {
+                const kids = ch[t].filter(c => comp.includes(c) && lv[c] === lv[t] + 1);
+                if (!kids.length) { stW[t] = cellW; return; }
+                let maxW = 0;
+                for (let r = 0, n = kids.length; r < Math.ceil(n / colCount); r++) {
+                    const row = kids.slice(r * colCount, (r + 1) * colCount);
+                    const rw  = row.reduce((s, k) => s + (stW[k] || cellW), 0)
+                              + (row.length - 1) * H_GAP;
+                    if (rw > maxW) maxW = rw;
+                }
+                stW[t] = Math.max(cellW, maxW);
+            });
+        }
+
+        // ── Phase 2: 루트 노드 배치 ───────────────────────────────
         byLv[0].sort((a, b) => a.localeCompare(b));
-        byLv[0].forEach((t, i) => {
-            nodeMap[t].x = i * cellW;
+        let rx = 0;
+        byLv[0].forEach(t => {
+            nodeMap[t].x = rx + stW[t] / 2;
             nodeMap[t].y = 0;
+            rx += stW[t] + H_GAP;
         });
 
-        for (let l = 1; l <= maxLv; l++) {
-            // 부모별 그룹화
-            const groups = new Map();
+        // ── Phase 3: 하향 배치 (서브트리 너비 기반, 항상 부모 바로 아래) ──
+        for (let l = 0; l < maxLv; l++) {
             byLv[l].forEach(t => {
-                const par = pa[t].find(p => comp.includes(p) && lv[p] === l - 1)
-                         ?? pa[t].find(p => comp.includes(p));
-                const key = par ?? '__none';
-                if (!groups.has(key)) groups.set(key, []);
-                groups.get(key).push(t);
-            });
-
-            // 부모 X 좌→우 순으로 그룹 정렬 (같은 X면 이름순)
-            const sortedGroups = [...groups.entries()].sort((a, b) => {
-                const xa = (a[0] !== '__none' && nodeMap[a[0]]) ? nodeMap[a[0]].x : 0;
-                const xb = (b[0] !== '__none' && nodeMap[b[0]]) ? nodeMap[b[0]].x : 0;
-                return xa !== xb ? xa - xb : String(a[0]).localeCompare(String(b[0]));
-            });
-
-            // 각 그룹을 부모 중앙 아래에 순서대로 배치 (겹치면 오른쪽으로 이동)
-            let curRight = null;
-            sortedGroups.forEach(([parentKey, kids]) => {
-                const px = (parentKey !== '__none' && nodeMap[parentKey]) ? nodeMap[parentKey].x : 0;
-                const rowCount0 = Math.min(kids.length, colCount);
-                const idealLeft = px - (rowCount0 - 1) * cellW / 2;
-                const startX = curRight === null ? idealLeft : Math.max(idealLeft, curRight);
-
-                kids.forEach((t, i) => {
-                    const row = Math.floor(i / colCount);
-                    const col = i % colCount;
-                    nodeMap[t].x = startX + col * cellW;
-                    nodeMap[t].y = levelY[l] + row * (NODE_H + V_GAP * 0.6);
-                });
-
-                curRight = startX + (rowCount0 - 1) * cellW + cellW / 2 + H_GAP;
-            });
-        }
-
-        // ── 상향 패스: 부모 X = 자식 범위 중앙 (균형 조정) ─────────
-        function _upwardPass() {
-            for (let l = maxLv - 1; l >= 0; l--) {
-                byLv[l].forEach(t => {
-                    const kids = ch[t].filter(c => comp.includes(c));
-                    if (kids.length) {
-                        const xs = kids.map(c => nodeMap[c].x);
-                        nodeMap[t].x = (Math.min(...xs) + Math.max(...xs)) / 2;
-                    }
-                });
-                _layoutResolveOverlap(byLv[l], cellW);
-            }
-        }
-        _upwardPass();
-
-        // ── 보정 패스: 멀리 배치된 자식 그룹을 부모 방향으로 당기기 ──
-        for (let iter = 0; iter < 5; iter++) {
-            let anyMoved = false;
-
-            for (let l = 1; l <= maxLv; l++) {
-                // 레벨 l의 노드를 부모별 그룹화
-                const gMap = new Map();
-                byLv[l].forEach(t => {
-                    const par = pa[t].find(p => comp.includes(p) && lv[p] === l - 1)
-                             ?? pa[t].find(p => comp.includes(p));
-                    const key = par ?? null;
-                    if (!gMap.has(key)) gMap.set(key, { pk: key, kids: [] });
-                    gMap.get(key).kids.push(t);
-                });
-
-                // 현재 X 기준으로 정렬 (이웃 판단용)
-                const grps = [...gMap.values()].map(g => {
-                    const xs = g.kids.map(k => nodeMap[k].x);
-                    const minX = Math.min(...xs), maxX = Math.max(...xs);
-                    return { pk: g.pk, kids: g.kids,
-                             minX: minX - cellW / 2, maxX: maxX + cellW / 2,
-                             cx: (minX + maxX) / 2 };
-                }).sort((a, b) => a.cx - b.cx);
-
-                for (let i = 0; i < grps.length; i++) {
-                    const g = grps[i];
-                    if (!g.pk || !nodeMap[g.pk]) continue;
-                    const target = nodeMap[g.pk].x;
-                    let shift = target - g.cx;
-                    if (Math.abs(shift) < 1) continue;
-
-                    // 왼쪽 이웃과 겹치지 않도록 제한
-                    if (shift < 0 && i > 0) {
-                        const allowed = grps[i - 1].maxX + H_GAP;
-                        if (g.minX + shift < allowed) shift = allowed - g.minX;
-                    }
-                    // 오른쪽 이웃과 겹치지 않도록 제한
-                    if (shift > 0 && i < grps.length - 1) {
-                        const allowed = grps[i + 1].minX - H_GAP;
-                        if (g.maxX + shift > allowed) shift = allowed - g.maxX;
-                    }
-
-                    if (Math.abs(shift) < 1) continue;
-                    g.kids.forEach(k => { nodeMap[k].x += shift; });
-                    g.minX += shift; g.maxX += shift; g.cx += shift;
-                    anyMoved = true;
+                const kids = ch[t].filter(c => comp.includes(c) && lv[c] === lv[t] + 1);
+                if (!kids.length) return;
+                const rows = Math.ceil(kids.length / colCount);
+                for (let r = 0; r < rows; r++) {
+                    const row = kids.slice(r * colCount, (r + 1) * colCount);
+                    const rw  = row.reduce((s, k) => s + (stW[k] || cellW), 0)
+                              + (row.length - 1) * H_GAP;
+                    let cx = nodeMap[t].x - rw / 2;
+                    row.forEach(k => {
+                        const kw = stW[k] || cellW;
+                        nodeMap[k].x = cx + kw / 2;
+                        nodeMap[k].y = levelY[lv[k]] + r * (NODE_H + V_GAP * 0.6);
+                        cx += kw + H_GAP;
+                    });
                 }
-            }
+            });
+        }
 
-            // 부모 위치 재조정
-            _upwardPass();
-            if (!anyMoved) break;
+        // ── Phase 4: 상향 패스 (겹침 해소 → 부모 재중앙) ─────────────
+        for (let l = maxLv - 1; l >= 0; l--) {
+            _layoutResolveOverlap(byLv[l + 1], cellW);
+            byLv[l].forEach(t => {
+                const kids = ch[t].filter(c => comp.includes(c));
+                if (kids.length) {
+                    const xs = kids.map(c => nodeMap[c].x);
+                    nodeMap[t].x = (Math.min(...xs) + Math.max(...xs)) / 2;
+                }
+            });
+            _layoutResolveOverlap(byLv[l], cellW);
         }
 
         // 컴포넌트를 globalX 기준으로 이동
