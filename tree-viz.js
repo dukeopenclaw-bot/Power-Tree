@@ -253,13 +253,25 @@ function applyPowerColors() {
     applyEdgeColors();
 }
 
+let showCrossEdges = false;
+function setCrossEdges(val) { showCrossEdges = val; applyEdgeColors(); }
+
 function applyEdgeColors() {
     d3.selectAll(".link").each(function() {
         const l       = d3.select(this);
         const fromTag = l.attr("data-from");
         const fn      = nodeMap[fromTag];
         const powered = fn ? fn.powered !== false : true;
-        if (powered) {
+        const isCross = l.classed("link-cross");
+
+        if (isCross) {
+            // 교차 엣지: 기본 거의 안 보임, 교차선 표시 시 35%
+            l.style("stroke",         powered ? "#e53935" : "#9e9e9e")
+             .style("stroke-width",   "1")
+             .style("stroke-dasharray","6,4")
+             .style("stroke-opacity", showCrossEdges ? "0.35" : "0.1")
+             .attr("marker-end", powered ? "url(#arr-cross)" : "url(#arr-off)");
+        } else if (powered) {
             l.style("stroke", "#e53935")
              .style("stroke-width", "1.8")
              .style("stroke-dasharray", null)
@@ -277,21 +289,27 @@ function applyEdgeColors() {
 
 function _highlightEdges(tag) {
     d3.selectAll(".link").each(function() {
-        const l    = d3.select(this);
-        const isUp = l.attr("data-to")   === tag;
-        const isDn = l.attr("data-from") === tag;
-        if (isUp) {
-            l.style("stroke", "#1565c0")
-             .style("stroke-width", "3")
-             .style("stroke-dasharray", null)
-             .style("stroke-opacity", "1")
+        const l       = d3.select(this);
+        const isUp    = l.attr("data-to")   === tag;
+        const isDn    = l.attr("data-from") === tag;
+        const isCross = l.classed("link-cross");
+
+        if (isUp && !isCross) {
+            l.style("stroke", "#1565c0").style("stroke-width", "3")
+             .style("stroke-dasharray", null).style("stroke-opacity", "1")
              .attr("marker-end", "url(#arr-up)");
-        } else if (isDn) {
-            l.style("stroke", "#e65100")
-             .style("stroke-width", "3")
-             .style("stroke-dasharray", null)
-             .style("stroke-opacity", "1")
+        } else if (isDn && !isCross) {
+            l.style("stroke", "#e65100").style("stroke-width", "3")
+             .style("stroke-dasharray", null).style("stroke-opacity", "1")
              .attr("marker-end", "url(#arr-down)");
+        } else if ((isUp || isDn) && isCross) {
+            // 선택 노드의 교차 엣지: 점선으로 강조 표시
+            l.style("stroke", isUp ? "#1565c0" : "#e65100")
+             .style("stroke-width", "1.5").style("stroke-dasharray", "6,4")
+             .style("stroke-opacity", "0.65")
+             .attr("marker-end", "url(#arr-cross)");
+        } else if (isCross) {
+            l.style("stroke-opacity", "0.04");
         } else {
             l.style("stroke-opacity", "0.15");
         }

@@ -30,7 +30,7 @@
       <div class="sidebar-header">
         <div class="sidebar-title">
           <h1>Power Tree</h1>
-          <span class="version">V6.2</span>
+          <span class="version">V6.3</span>
         </div>
         <button id="btn-reset" onclick="resetTree()" title="초기화">↺</button>
       </div>
@@ -95,6 +95,10 @@
       <label class="toolbar-check" title="하위 장치 동반 이동">
         <input type="checkbox" id="chk-move-subeq" onchange="setMoveSubeq(this.checked)">
         <span>하위↕</span>
+      </label>
+      <label class="toolbar-check" title="교차/보조 연결선 표시">
+        <input type="checkbox" id="chk-cross-edge" onchange="setCrossEdges(this.checked)">
+        <span>교차선</span>
       </label>
     </div>
 
