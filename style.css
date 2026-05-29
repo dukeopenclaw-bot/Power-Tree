@@ -545,6 +545,12 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
   stroke-linejoin: round;
   transition: stroke 0.18s, stroke-width 0.18s, stroke-opacity 0.18s;
 }
+/* 교차 엣지: 주 계통 흐름과 무관한 수평/대각 연결 → 점선 + 반투명 */
+.link-cross {
+  stroke-opacity: 0.35;
+  stroke-width: 1;
+  stroke-dasharray: 6,4;
+}
 
 
 /* ─── CKT Label Styles ─── */

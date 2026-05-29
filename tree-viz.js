@@ -369,16 +369,18 @@ function renderTree(preservedTransform) {
 
     const defs = svg.append("defs");
     [
-        { id: "arr-on",   fill: "#e53935" },
-        { id: "arr-off",  fill: "#bdbdbd" },
-        { id: "arr-up",   fill: "#1565c0" },
-        { id: "arr-down", fill: "#e65100" },
-    ].forEach(({ id, fill }) => {
-        defs.append("marker")
+        { id: "arr-on",    fill: "#e53935", w: 6 },
+        { id: "arr-off",   fill: "#bdbdbd", w: 6 },
+        { id: "arr-up",    fill: "#1565c0", w: 6 },
+        { id: "arr-down",  fill: "#e65100", w: 6 },
+        { id: "arr-cross", fill: "#e53935", w: 4, opacity: 0.4 },
+    ].forEach(({ id, fill, w, opacity }) => {
+        const p = defs.append("marker")
             .attr("id", id)
             .attr("viewBox", "0 -5 10 10").attr("refX", 10).attr("refY", 0)
-            .attr("markerWidth", 6).attr("markerHeight", 6).attr("orient", "auto")
+            .attr("markerWidth", w).attr("markerHeight", w).attr("orient", "auto")
             .append("path").attr("d", "M0,-5L10,0L0,5").attr("fill", fill);
+        if (opacity !== undefined) p.attr("fill-opacity", opacity);
     });
 
     const edgeLayer  = g.append("g").attr("class", "links");
@@ -390,12 +392,17 @@ function renderTree(preservedTransform) {
         const tn = nodeMap[edge.toTag];
         if (!fn || !tn) return;
 
+        // 교차 엣지 감지: 수평 이동이 수직 낙차의 2배 초과 → cross-edge
+        const edgeDy = tn.y - fn.y;
+        const edgeDx = Math.abs(fn.x - tn.x);
+        const isCrossEdge = edgeDy < NODE_H * 0.5 || (edgeDy > 0 && edgeDx > edgeDy * 2);
+
         edgeLayer.append("path")
-            .attr("class", "link")
+            .attr("class", isCrossEdge ? "link link-cross" : "link")
             .attr("data-from", edge.fromTag)
             .attr("data-to",   edge.toTag)
             .attr("d", _bezier(fn, tn))
-            .attr("marker-end", "url(#arr-on)");
+            .attr("marker-end", isCrossEdge ? "url(#arr-cross)" : "url(#arr-on)");
 
         const sameLevel = Math.abs(fn.y - tn.y) < NODE_H * 1.5;
         const x1 = sameLevel ? fn.x + (tn.x > fn.x ?  fn.w/2+2 : -fn.w/2-2) : fn.x;
@@ -980,14 +987,14 @@ function autoLayout() {
 
                 // 선 교차 최소화 (barycenter 휴리스틱):
                 // 이미 배치된 다른 부모의 X 기준으로 자식 정렬
-                // → 다른 부모가 왼쪽에 있으면 해당 자식을 왼쪽에 배치
+                // 당기는 강도 30% 제한 → 자식이 너무 멀리 산개하지 않도록
                 kids = kids.slice().sort((a, b) => {
                     const bc = k => {
                         const others = pa[k].filter(
                             p => p !== t && comp.includes(p) && nodeMap[p]);
-                        return others.length
-                            ? others.reduce((s, p) => s + nodeMap[p].x, 0) / others.length
-                            : nodeMap[t].x;
+                        if (!others.length) return nodeMap[t].x;
+                        const avgOther = others.reduce((s, p) => s + nodeMap[p].x, 0) / others.length;
+                        return nodeMap[t].x + (avgOther - nodeMap[t].x) * 0.3;
                     };
                     return bc(a) - bc(b);
                 });
@@ -1008,12 +1015,16 @@ function autoLayout() {
             });
 
             // 다중 부모 노드 위치 보정:
-            // 한 노드가 여러 부모를 가질 때, 모든 부모 X의 평균으로 이동
-            // → 어느 한쪽 부모와만 가까운 편향 방지
+            // 현재 위치에서 가장 가까운 부모를 primary로 보고,
+            // primary 60% + 전체 평균 40% 가중 이동 → primary에 편향되나 secondary도 반영
             byLv[l + 1].forEach(t => {
                 const pars = pa[t].filter(p => comp.includes(p) && lv[p] === lv[t] - 1);
                 if (pars.length <= 1) return;
-                nodeMap[t].x = pars.reduce((s, p) => s + nodeMap[p].x, 0) / pars.length;
+                const curX   = nodeMap[t].x;
+                const primary = pars.reduce((a, b) =>
+                    Math.abs(nodeMap[a].x - curX) <= Math.abs(nodeMap[b].x - curX) ? a : b);
+                const avgX   = pars.reduce((s, p) => s + nodeMap[p].x, 0) / pars.length;
+                nodeMap[t].x = nodeMap[primary].x * 0.6 + avgX * 0.4;
             });
         }
 
