@@ -994,16 +994,30 @@ function autoLayout() {
         }
 
         // ── Phase 4: 상향 패스 (겹침 해소 → 부모 재중앙) ─────────────
-        for (let l = maxLv - 1; l >= 0; l--) {
-            _layoutResolveOverlap(byLv[l + 1], cellW);
-            byLv[l].forEach(t => {
-                const kids = ch[t].filter(c => comp.includes(c));
-                if (kids.length) {
-                    const xs = kids.map(c => nodeMap[c].x);
-                    nodeMap[t].x = (Math.min(...xs) + Math.max(...xs)) / 2;
-                }
+        // 같은 Y(행)끼리만 겹침 해소 — 그리드 row가 달라 Y가 다른 노드는
+        // X가 같아도 겹침이 아니므로 구분하여 처리
+        const resolveByRow = group => {
+            const byY = new Map();
+            group.forEach(t => {
+                const key = Math.round(nodeMap[t].y);
+                if (!byY.has(key)) byY.set(key, []);
+                byY.get(key).push(t);
             });
-            _layoutResolveOverlap(byLv[l], cellW);
+            byY.forEach(row => _layoutResolveOverlap(row, cellW));
+        };
+
+        for (let l = maxLv - 1; l >= 0; l--) {
+            resolveByRow(byLv[l + 1]);
+            byLv[l].forEach(t => {
+                const kids = ch[t].filter(c => comp.includes(c) && lv[c] === lv[t] + 1);
+                if (!kids.length) return;
+                // 서브트리 스팬 기준 중앙 — 단순 좌표 평균 대신 실제 점유 범위의 중심
+                // (서브트리가 넓은 자식과 좁은 자식이 섞여도 부모가 치우치지 않음)
+                const left  = Math.min(...kids.map(c => nodeMap[c].x - (stW[c] || cellW) / 2));
+                const right = Math.max(...kids.map(c => nodeMap[c].x + (stW[c] || cellW) / 2));
+                nodeMap[t].x = (left + right) / 2;
+            });
+            resolveByRow(byLv[l]);
         }
 
         // 컴포넌트를 globalX 기준으로 이동
