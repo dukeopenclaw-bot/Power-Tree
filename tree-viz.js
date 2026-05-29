@@ -975,8 +975,23 @@ function autoLayout() {
         // ── Phase 3: 하향 배치 (서브트리 너비 기반, 항상 부모 바로 아래) ──
         for (let l = 0; l < maxLv; l++) {
             byLv[l].forEach(t => {
-                const kids = ch[t].filter(c => comp.includes(c) && lv[c] === lv[t] + 1);
+                let kids = ch[t].filter(c => comp.includes(c) && lv[c] === lv[t] + 1);
                 if (!kids.length) return;
+
+                // 선 교차 최소화 (barycenter 휴리스틱):
+                // 이미 배치된 다른 부모의 X 기준으로 자식 정렬
+                // → 다른 부모가 왼쪽에 있으면 해당 자식을 왼쪽에 배치
+                kids = kids.slice().sort((a, b) => {
+                    const bc = k => {
+                        const others = pa[k].filter(
+                            p => p !== t && comp.includes(p) && nodeMap[p]);
+                        return others.length
+                            ? others.reduce((s, p) => s + nodeMap[p].x, 0) / others.length
+                            : nodeMap[t].x;
+                    };
+                    return bc(a) - bc(b);
+                });
+
                 const rows = Math.ceil(kids.length / colCount);
                 for (let r = 0; r < rows; r++) {
                     const row = kids.slice(r * colCount, (r + 1) * colCount);
@@ -990,6 +1005,15 @@ function autoLayout() {
                         cx += kw + H_GAP;
                     });
                 }
+            });
+
+            // 다중 부모 노드 위치 보정:
+            // 한 노드가 여러 부모를 가질 때, 모든 부모 X의 평균으로 이동
+            // → 어느 한쪽 부모와만 가까운 편향 방지
+            byLv[l + 1].forEach(t => {
+                const pars = pa[t].filter(p => comp.includes(p) && lv[p] === lv[t] - 1);
+                if (pars.length <= 1) return;
+                nodeMap[t].x = pars.reduce((s, p) => s + nodeMap[p].x, 0) / pars.length;
             });
         }
 
