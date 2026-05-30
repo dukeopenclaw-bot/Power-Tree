@@ -1070,28 +1070,13 @@ function autoLayout() {
                 kids.forEach(k => { placed.add(k); placedBy[k] = t; });
             });
 
-            // 다중 부모 노드 위치 보정:
-            // - 직접 부모(lv[p] = lv[t]-1) 여러 개 → 단순 평균
-            // - 레벨 스킵 부모 존재 → 직접 부모 75% + 스킵 부모 평균 25%
-            //   (스킵 부모가 많아도 합산 비중을 25%로 고정 → 혼란 방지)
+            // 다중 직접 부모(lv[p] = lv[t]-1) 노드 위치 보정: 직접 부모들의 평균
+            // ※ 레벨 스킵 부모(lv[p] < lv[t]-1)는 위치 보정에 포함하지 않음
+            //   → 스킵 부모 쪽으로 끌려가 다른 서브트리 사이에 침투하는 현상 방지
             byLv[l + 1].forEach(t => {
                 const directPars = pa[t].filter(p => comp.includes(p) && lv[p] === lv[t] - 1 && nodeMap[p]);
-                const skipPars   = pa[t].filter(p => comp.includes(p) && lv[p] <  lv[t] - 1 && nodeMap[p]);
-                if (directPars.length + skipPars.length <= 1) return;
-
-                const directAvgX = directPars.length
-                    ? directPars.reduce((s, p) => s + nodeMap[p].x, 0) / directPars.length
-                    : nodeMap[t].x;
-
-                if (!skipPars.length) {
-                    // 직접 부모만 여럿: 단순 평균
-                    nodeMap[t].x = directAvgX;
-                } else if (directPars.length) {
-                    // 직접 + 스킵 혼재: 직접 부모 우선, 스킵은 25%만 반영
-                    const skipAvgX = skipPars.reduce((s, p) => s + nodeMap[p].x, 0) / skipPars.length;
-                    nodeMap[t].x = directAvgX * 0.75 + skipAvgX * 0.25;
-                }
-                // 스킵 부모만: 재배치 없음 (Phase 3가 이미 배치함)
+                if (directPars.length <= 1) return;
+                nodeMap[t].x = directPars.reduce((s, p) => s + nodeMap[p].x, 0) / directPars.length;
             });
         }
 
