@@ -545,10 +545,9 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
   stroke-linejoin: round;
   transition: stroke 0.18s, stroke-width 0.18s, stroke-opacity 0.18s;
 }
-/* 교차 엣지: 기본값은 거의 안 보이게, 노드 선택 시 또는 교차선 토글 시 표시 */
+/* 교차 엣지 */
 .link-cross {
-  stroke-opacity: 0.1;
-  stroke-width: 1;
+  stroke-width: 1.5;
 }
 
 

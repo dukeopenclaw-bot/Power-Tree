@@ -265,12 +265,11 @@ function applyEdgeColors() {
         const isCross = l.classed("link-cross");
 
         if (isCross) {
-            // 교차 엣지: 기본 거의 안 보임, 교차선 표시 시 35%
             l.style("stroke",         powered ? "#e53935" : "#9e9e9e")
-             .style("stroke-width",   "1")
+             .style("stroke-width",   "1.5")
              .style("stroke-dasharray", null)
-             .style("stroke-opacity", showCrossEdges ? "0.35" : "0.1")
-             .attr("marker-end", powered ? "url(#arr-cross)" : "url(#arr-off)");
+             .style("stroke-opacity", "0.8")
+             .attr("marker-end", powered ? "url(#arr-on)" : "url(#arr-off)");
         } else if (powered) {
             l.style("stroke", "#e53935")
              .style("stroke-width", "1.8")
