@@ -1091,6 +1091,8 @@ function autoLayout() {
         // ── Phase 4: 상향 패스 (겹침 해소 → 부모 재중앙) ─────────────
         // 같은 Y(행)끼리만 겹침 해소 — 그리드 row가 달라 Y가 다른 노드는
         // X가 같아도 겹침이 아니므로 구분하여 처리
+        // ※ shiftSubtree: 공유 자식(직접 부모 ≥2)은 이동 제외 → 이중 이동 방지
+        //   이후 recenterShared 로 부모 평균 위치로 재보정
         const resolveByRow = group => {
             const byY = new Map();
             group.forEach(t => {
@@ -1098,7 +1100,43 @@ function autoLayout() {
                 if (!byY.has(key)) byY.set(key, []);
                 byY.get(key).push(t);
             });
-            byY.forEach(row => _layoutResolveOverlap(row, cellW, ch));
+            byY.forEach(row => {
+                if (row.length <= 1) return;
+                row.sort((a, b) => nodeMap[a].x - nodeMap[b].x);
+
+                const shiftSubtree = (root, delta) => {
+                    const q = [root];
+                    const seen = new Set([root]);
+                    while (q.length) {
+                        const n = q.shift();
+                        nodeMap[n].x += delta;
+                        (ch[n] || []).forEach(c => {
+                            if (seen.has(c) || !nodeMap[c]) return;
+                            // 공유 자식(직접 부모 ≥2)은 subtree 이동에서 제외 (이중 이동 방지)
+                            const numDirPars = (pa[c] || []).filter(p => comp.includes(p) && lv[p] === lv[c] - 1).length;
+                            if (numDirPars <= 1) { seen.add(c); q.push(c); }
+                        });
+                    }
+                };
+
+                for (let i = 1; i < row.length; i++) {
+                    const delta = nodeMap[row[i - 1]].x + cellW - nodeMap[row[i]].x;
+                    if (delta > 0) shiftSubtree(row[i], delta);
+                }
+                for (let i = row.length - 2; i >= 0; i--) {
+                    const delta = nodeMap[row[i + 1]].x - cellW - nodeMap[row[i]].x;
+                    if (delta < 0) shiftSubtree(row[i], delta);
+                }
+            });
+        };
+
+        // 공유 자식을 직접 부모들의 평균 x로 재보정
+        const recenterShared = level => {
+            (byLv[level] || []).forEach(t => {
+                const directPars = (pa[t] || []).filter(p => comp.includes(p) && lv[p] === lv[t] - 1 && nodeMap[p]);
+                if (directPars.length <= 1) return;
+                nodeMap[t].x = directPars.reduce((s, p) => s + nodeMap[p].x, 0) / directPars.length;
+            });
         };
 
         for (let l = maxLv - 1; l >= 0; l--) {
@@ -1119,6 +1157,7 @@ function autoLayout() {
                 nodeMap[t].x = (left + right) / 2;
             });
             resolveByRow(byLv[l]);
+            recenterShared(l + 1); // 부모 이동 후 공유 자식 위치를 부모 평균으로 재보정
         }
 
         // 컴포넌트를 globalX 기준으로 이동
