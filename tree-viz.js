@@ -997,9 +997,15 @@ function autoLayout() {
         });
 
         // ── Phase 3: 하향 배치 (서브트리 너비 기반, 항상 부모 바로 아래) ──
+        // placed: 이미 배치된 자식 → 복수 부모의 중복 배치 방지
+        // placedBy: 어느 부모가 배치했는지 기록 → Phase 4 부모 재중앙 시 사용
+        const placed   = new Set();
+        const placedBy = {};
+
         for (let l = 0; l < maxLv; l++) {
             byLv[l].forEach(t => {
-                let kids = ch[t].filter(c => comp.includes(c) && lv[c] === lv[t] + 1);
+                // 아직 배치되지 않은 자식만 처리 (먼저 처리된 부모가 "주 부모")
+                let kids = ch[t].filter(c => comp.includes(c) && lv[c] === lv[t] + 1 && !placed.has(c));
                 if (!kids.length) return;
 
                 // 선 교차 최소화 (barycenter 휴리스틱):
@@ -1029,19 +1035,15 @@ function autoLayout() {
                         cx += kw + H_GAP;
                     });
                 }
+                kids.forEach(k => { placed.add(k); placedBy[k] = t; });
             });
 
-            // 다중 부모 노드 위치 보정:
-            // 현재 위치에서 가장 가까운 부모를 primary로 보고,
-            // primary 60% + 전체 평균 40% 가중 이동 → primary에 편향되나 secondary도 반영
+            // 다중 부모 노드 위치 보정: 모든 부모 X의 단순 평균으로 이동
+            // (주 부모 편향 제거 → 어느 부모가 먼저 배치하든 결과가 균등해짐)
             byLv[l + 1].forEach(t => {
                 const pars = pa[t].filter(p => comp.includes(p) && lv[p] === lv[t] - 1);
                 if (pars.length <= 1) return;
-                const curX   = nodeMap[t].x;
-                const primary = pars.reduce((a, b) =>
-                    Math.abs(nodeMap[a].x - curX) <= Math.abs(nodeMap[b].x - curX) ? a : b);
-                const avgX   = pars.reduce((s, p) => s + nodeMap[p].x, 0) / pars.length;
-                nodeMap[t].x = nodeMap[primary].x * 0.6 + avgX * 0.4;
+                nodeMap[t].x = pars.reduce((s, p) => s + nodeMap[p].x, 0) / pars.length;
             });
         }
 
@@ -1061,10 +1063,10 @@ function autoLayout() {
         for (let l = maxLv - 1; l >= 0; l--) {
             resolveByRow(byLv[l + 1]);
             byLv[l].forEach(t => {
-                const kids = ch[t].filter(c => comp.includes(c) && lv[c] === lv[t] + 1);
+                // 직접 배치한 자식만으로 부모 재중앙 계산
+                // (다른 부모가 배치한 다중부모 자식 제외 → 부모가 엉뚱한 방향으로 끌리지 않음)
+                const kids = ch[t].filter(c => comp.includes(c) && lv[c] === lv[t] + 1 && placedBy[c] === t);
                 if (!kids.length) return;
-                // 서브트리 스팬 기준 중앙 — 단순 좌표 평균 대신 실제 점유 범위의 중심
-                // (서브트리가 넓은 자식과 좁은 자식이 섞여도 부모가 치우치지 않음)
                 const left  = Math.min(...kids.map(c => nodeMap[c].x - (stW[c] || cellW) / 2));
                 const right = Math.max(...kids.map(c => nodeMap[c].x + (stW[c] || cellW) / 2));
                 nodeMap[t].x = (left + right) / 2;
