@@ -949,7 +949,7 @@ function autoLayout() {
             ch[n].filter(c => comp.includes(c)).forEach(c => {
                 const nl = lv[n] + 1;
                 if (!visited.has(c)) { visited.add(c); lv[c] = nl; bfsQ.push(c); }
-                else if (nl > lv[c])  { lv[c] = nl; }  // 더 깊은 레벨로 갱신
+                else if (nl > lv[c])  { lv[c] = nl; bfsQ.push(c); }  // 레벨 상향 시 자식에게 재전파
             });
         }
         comp.filter(t => lv[t] === undefined).forEach(t => { lv[t] = 0; });
