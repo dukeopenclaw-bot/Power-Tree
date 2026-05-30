@@ -971,6 +971,7 @@ function autoLayout() {
 
         // ── Phase 1: 서브트리 너비 계산 (하→상) ────────────────────
         // 각 노드의 전체 하위 서브트리를 colCount 그리드로 펼칠 때 필요한 최소 너비
+        // ※ 공유 자식(부모 N개)은 1/N 기여 → 노드 수 증가 시 stW 이중계산 방지
         const stW = {};
         for (let l = maxLv; l >= 0; l--) {
             byLv[l].forEach(t => {
@@ -979,8 +980,11 @@ function autoLayout() {
                 let maxW = 0;
                 for (let r = 0, n = kids.length; r < Math.ceil(n / colCount); r++) {
                     const row = kids.slice(r * colCount, (r + 1) * colCount);
-                    const rw  = row.reduce((s, k) => s + (stW[k] || cellW), 0)
-                              + (row.length - 1) * H_GAP;
+                    const rw  = row.reduce((s, k) => {
+                        // 같은 레벨 부모가 N개면 이 부모는 1/N만 차지 (합산 시 1배가 됨)
+                        const numPars = pa[k].filter(p => comp.includes(p) && lv[p] === lv[k] - 1).length;
+                        return s + (stW[k] || cellW) / Math.max(1, numPars);
+                    }, 0) + (row.length - 1) * H_GAP;
                     if (rw > maxW) maxW = rw;
                 }
                 stW[t] = Math.max(cellW, maxW);
@@ -1042,13 +1046,27 @@ function autoLayout() {
             });
 
             // 다중 부모 노드 위치 보정:
-            // 직전 레벨뿐 아니라 레벨을 건너뛰는 직접 부모(스킵 엣지)도 포함
-            // 레벨 차이 역수를 가중치로 → 가까운 부모일수록 더 큰 영향
+            // - 직접 부모(lv[p] = lv[t]-1) 여러 개 → 단순 평균
+            // - 레벨 스킵 부모 존재 → 직접 부모 75% + 스킵 부모 평균 25%
+            //   (스킵 부모가 많아도 합산 비중을 25%로 고정 → 혼란 방지)
             byLv[l + 1].forEach(t => {
-                const allPars = pa[t].filter(p => comp.includes(p) && lv[p] < lv[t] && nodeMap[p]);
-                if (allPars.length <= 1) return;
-                const totalW = allPars.reduce((s, p) => s + 1 / (lv[t] - lv[p]), 0);
-                nodeMap[t].x = allPars.reduce((s, p) => s + nodeMap[p].x / (lv[t] - lv[p]), 0) / totalW;
+                const directPars = pa[t].filter(p => comp.includes(p) && lv[p] === lv[t] - 1 && nodeMap[p]);
+                const skipPars   = pa[t].filter(p => comp.includes(p) && lv[p] <  lv[t] - 1 && nodeMap[p]);
+                if (directPars.length + skipPars.length <= 1) return;
+
+                const directAvgX = directPars.length
+                    ? directPars.reduce((s, p) => s + nodeMap[p].x, 0) / directPars.length
+                    : nodeMap[t].x;
+
+                if (!skipPars.length) {
+                    // 직접 부모만 여럿: 단순 평균
+                    nodeMap[t].x = directAvgX;
+                } else if (directPars.length) {
+                    // 직접 + 스킵 혼재: 직접 부모 우선, 스킵은 25%만 반영
+                    const skipAvgX = skipPars.reduce((s, p) => s + nodeMap[p].x, 0) / skipPars.length;
+                    nodeMap[t].x = directAvgX * 0.75 + skipAvgX * 0.25;
+                }
+                // 스킵 부모만: 재배치 없음 (Phase 3가 이미 배치함)
             });
         }
 
