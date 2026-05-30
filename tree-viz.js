@@ -265,11 +265,21 @@ function applyEdgeColors() {
         const isCross = l.classed("link-cross");
 
         if (isCross) {
-            l.style("stroke",         powered ? "#e53935" : "#9e9e9e")
-             .style("stroke-width",   "1.5")
-             .style("stroke-dasharray", null)
-             .style("stroke-opacity", "0.8")
-             .attr("marker-end", powered ? "url(#arr-on)" : "url(#arr-off)");
+            if (showCrossEdges) {
+                // 교차선 표시 ON: 실선으로 표시
+                l.style("stroke",          powered ? "#e53935" : "#9e9e9e")
+                 .style("stroke-width",    "1.5")
+                 .style("stroke-dasharray", null)
+                 .style("stroke-opacity",  "0.8")
+                 .attr("marker-end", powered ? "url(#arr-on)" : "url(#arr-off)");
+            } else {
+                // 교차선 표시 OFF: 거의 보이지 않게 (노드 선택 시 _highlightEdges가 덮어씀)
+                l.style("stroke",          powered ? "#e53935" : "#9e9e9e")
+                 .style("stroke-width",    "1")
+                 .style("stroke-dasharray", null)
+                 .style("stroke-opacity",  "0.08")
+                 .attr("marker-end", "url(#arr-cross)");
+            }
         } else if (powered) {
             l.style("stroke", "#e53935")
              .style("stroke-width", "1.8")
@@ -1028,6 +1038,21 @@ function autoLayout() {
                     };
                     return bc(a) - bc(b);
                 });
+
+                // 같은 레벨에서 직접 연결된 형제 노드는 인접하게 그룹화
+                // (예: EBC-62770 → EDB-62770 같은 동일레벨 엣지가 있으면 옆에 배치)
+                {
+                    const kSet = new Set(kids);
+                    const grouped = [], added = new Set();
+                    kids.forEach(k => {
+                        if (added.has(k)) return;
+                        grouped.push(k); added.add(k);
+                        [...ch[k], ...pa[k]]
+                            .filter(n => kSet.has(n) && !added.has(n) && lv[n] === lv[k])
+                            .forEach(peer => { grouped.push(peer); added.add(peer); });
+                    });
+                    kids = grouped;
+                }
 
                 const rows = Math.ceil(kids.length / colCount);
                 for (let r = 0; r < rows; r++) {
