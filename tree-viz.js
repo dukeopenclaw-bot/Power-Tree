@@ -268,7 +268,7 @@ function applyEdgeColors() {
             // 교차 엣지: 기본 거의 안 보임, 교차선 표시 시 35%
             l.style("stroke",         powered ? "#e53935" : "#9e9e9e")
              .style("stroke-width",   "1")
-             .style("stroke-dasharray","6,4")
+             .style("stroke-dasharray", null)
              .style("stroke-opacity", showCrossEdges ? "0.35" : "0.1")
              .attr("marker-end", powered ? "url(#arr-cross)" : "url(#arr-off)");
         } else if (powered) {
@@ -303,10 +303,10 @@ function _highlightEdges(tag) {
              .style("stroke-dasharray", null).style("stroke-opacity", "1")
              .attr("marker-end", "url(#arr-down)");
         } else if ((isUp || isDn) && isCross) {
-            // 선택 노드의 교차 엣지: 점선으로 강조 표시
+            // 선택 노드의 교차 엣지: 실선으로 강조 표시
             l.style("stroke", isUp ? "#1565c0" : "#e65100")
-             .style("stroke-width", "1.5").style("stroke-dasharray", "6,4")
-             .style("stroke-opacity", "0.65")
+             .style("stroke-width", "2").style("stroke-dasharray", null)
+             .style("stroke-opacity", "0.75")
              .attr("marker-end", "url(#arr-cross)");
         } else if (isCross) {
             l.style("stroke-opacity", "0.04");

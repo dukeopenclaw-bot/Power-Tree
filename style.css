@@ -549,7 +549,6 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 .link-cross {
   stroke-opacity: 0.1;
   stroke-width: 1;
-  stroke-dasharray: 6,4;
 }
 
 
