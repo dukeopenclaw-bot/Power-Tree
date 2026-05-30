@@ -1080,7 +1080,7 @@ function autoLayout() {
                 if (!byY.has(key)) byY.set(key, []);
                 byY.get(key).push(t);
             });
-            byY.forEach(row => _layoutResolveOverlap(row, cellW));
+            byY.forEach(row => _layoutResolveOverlap(row, cellW, ch));
         };
 
         for (let l = maxLv - 1; l >= 0; l--) {
@@ -1114,18 +1114,32 @@ function autoLayout() {
 }
 
 // 같은 레벨 노드 겹침 해소 (정렬 후 앞뒤로 밀어냄)
-function _layoutResolveOverlap(group, cellW) {
+function _layoutResolveOverlap(group, cellW, ch) {
     if (group.length <= 1) return;
     group.sort((a, b) => nodeMap[a].x - nodeMap[b].x);
-    // 앞에서 뒤로: 겹치면 오른쪽으로 밀기
+
+    // 노드와 그 모든 하위 자손을 delta만큼 이동
+    const shiftSubtree = (root, delta) => {
+        const q = [root];
+        const seen = new Set([root]);
+        while (q.length) {
+            const n = q.shift();
+            nodeMap[n].x += delta;
+            (ch?.[n] || []).forEach(c => {
+                if (!seen.has(c) && nodeMap[c]) { seen.add(c); q.push(c); }
+            });
+        }
+    };
+
+    // 앞에서 뒤로: 겹치면 서브트리 전체를 오른쪽으로 밀기
     for (let i = 1; i < group.length; i++) {
-        if (nodeMap[group[i]].x < nodeMap[group[i - 1]].x + cellW)
-            nodeMap[group[i]].x = nodeMap[group[i - 1]].x + cellW;
+        const delta = nodeMap[group[i - 1]].x + cellW - nodeMap[group[i]].x;
+        if (delta > 0) shiftSubtree(group[i], delta);
     }
-    // 뒤에서 앞으로: 공간 있으면 왼쪽으로 당기기 (균형 유지)
+    // 뒤에서 앞으로: 서브트리 전체를 왼쪽으로 당겨 균형 유지
     for (let i = group.length - 2; i >= 0; i--) {
-        if (nodeMap[group[i]].x > nodeMap[group[i + 1]].x - cellW)
-            nodeMap[group[i]].x = nodeMap[group[i + 1]].x - cellW;
+        const delta = nodeMap[group[i + 1]].x - cellW - nodeMap[group[i]].x;
+        if (delta < 0) shiftSubtree(group[i], delta);
     }
 }
 
