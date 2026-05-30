@@ -1028,17 +1028,36 @@ function autoLayout() {
                     return bc(a) - bc(b);
                 });
 
-                // 같은 레벨에서 직접 연결된 형제 노드는 인접하게 그룹화
-                // (예: EBC-62770 → EDB-62770 같은 동일레벨 엣지가 있으면 옆에 배치)
+                // 같은 레벨에서 직접 연결된 형제, 또는 공통 자식(lv+1)을 가진 형제는 인접하게 그룹화
+                // → EBC-62770과 EBC-62780이 EDB-62770을 공통 자식으로 가지면 옆에 배치
                 {
                     const kSet = new Set(kids);
                     const grouped = [], added = new Set();
+
+                    // k의 인접 형제: 동레벨 직접 연결 + 공통 자식을 가진 형제
+                    const adjacentOf = k => {
+                        const peers = new Set();
+                        [...ch[k], ...pa[k]]
+                            .filter(n => kSet.has(n) && lv[n] === lv[k])
+                            .forEach(n => peers.add(n));
+                        ch[k]
+                            .filter(c => comp.includes(c) && lv[c] === lv[k] + 1)
+                            .forEach(c => {
+                                pa[c].filter(p => kSet.has(p) && p !== k).forEach(p => peers.add(p));
+                            });
+                        return [...peers];
+                    };
+
                     kids.forEach(k => {
                         if (added.has(k)) return;
-                        grouped.push(k); added.add(k);
-                        [...ch[k], ...pa[k]]
-                            .filter(n => kSet.has(n) && !added.has(n) && lv[n] === lv[k])
-                            .forEach(peer => { grouped.push(peer); added.add(peer); });
+                        // BFS로 전이적 그룹 확장
+                        const queue = [k];
+                        while (queue.length) {
+                            const node = queue.shift();
+                            if (added.has(node)) continue;
+                            grouped.push(node); added.add(node);
+                            adjacentOf(node).filter(n => !added.has(n)).forEach(n => queue.push(n));
+                        }
                     });
                     kids = grouped;
                 }
