@@ -265,21 +265,12 @@ function applyEdgeColors() {
         const isCross = l.classed("link-cross");
 
         if (isCross) {
-            if (showCrossEdges) {
-                // 교차선 표시 ON: 실선으로 표시
-                l.style("stroke",          powered ? "#e53935" : "#9e9e9e")
-                 .style("stroke-width",    "1.5")
-                 .style("stroke-dasharray", null)
-                 .style("stroke-opacity",  "0.8")
-                 .attr("marker-end", powered ? "url(#arr-on)" : "url(#arr-off)");
-            } else {
-                // 교차선 표시 OFF: 거의 보이지 않게 (노드 선택 시 _highlightEdges가 덮어씀)
-                l.style("stroke",          powered ? "#e53935" : "#9e9e9e")
-                 .style("stroke-width",    "1")
-                 .style("stroke-dasharray", null)
-                 .style("stroke-opacity",  "0.08")
-                 .attr("marker-end", "url(#arr-cross)");
-            }
+            // 교차선: showCrossEdges 토글과 무관하게 항상 진하게 표시
+            l.style("stroke",          powered ? "#e53935" : "#9e9e9e")
+             .style("stroke-width",    "1.5")
+             .style("stroke-dasharray", null)
+             .style("stroke-opacity",  "0.8")
+             .attr("marker-end", powered ? "url(#arr-on)" : "url(#arr-off)");
         } else if (powered) {
             l.style("stroke", "#e53935")
              .style("stroke-width", "1.8")
@@ -1097,8 +1088,14 @@ function autoLayout() {
             resolveByRow(byLv[l + 1]);
             byLv[l].forEach(t => {
                 // 직접 배치한 자식만으로 부모 재중앙 계산
-                // (다른 부모가 배치한 다중부모 자식 제외 → 부모가 엉뚱한 방향으로 끌리지 않음)
-                const kids = ch[t].filter(c => comp.includes(c) && lv[c] === lv[t] + 1 && placedBy[c] === t);
+                // 이 부모가 직접 배치한 자식 중, 직접 부모가 자신 하나뿐인 단독 자식만 사용
+                // 다중 부모 자식(EBC-62770, EBC-62780 둘 다 EDB의 부모인 경우)은 제외
+                // → 재중앙 계산으로 인해 부모가 공유 자식 위치로 끌려가 형제와 분리되는 현상 방지
+                const kids = ch[t].filter(c => {
+                    if (!comp.includes(c) || lv[c] !== lv[t] + 1 || placedBy[c] !== t) return false;
+                    const directPars = pa[c].filter(p => comp.includes(p) && lv[p] === lv[c] - 1);
+                    return directPars.length === 1; // 단독 부모인 자식만
+                });
                 if (!kids.length) return;
                 const left  = Math.min(...kids.map(c => nodeMap[c].x - (stW[c] || cellW) / 2));
                 const right = Math.max(...kids.map(c => nodeMap[c].x + (stW[c] || cellW) / 2));
