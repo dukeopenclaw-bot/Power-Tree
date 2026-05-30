@@ -972,7 +972,8 @@ function autoLayout() {
 
         // ── Phase 1: 서브트리 너비 계산 (하→상) ────────────────────
         // 각 노드의 전체 하위 서브트리를 colCount 그리드로 펼칠 때 필요한 최소 너비
-        // ※ 공유 자식(부모 N개)은 1/N 기여 → 노드 수 증가 시 stW 이중계산 방지
+        // 공유 자식도 full stW 반영 — Phase 3에서 실제 배치 시 전체 너비를 사용하기 때문에
+        // 1/N 할인을 적용하면 부모의 할당 공간이 실제 배치 너비보다 좁아져 다른 서브트리에 침투하는 버그 발생
         const stW = {};
         for (let l = maxLv; l >= 0; l--) {
             byLv[l].forEach(t => {
@@ -981,11 +982,8 @@ function autoLayout() {
                 let maxW = 0;
                 for (let r = 0, n = kids.length; r < Math.ceil(n / colCount); r++) {
                     const row = kids.slice(r * colCount, (r + 1) * colCount);
-                    const rw  = row.reduce((s, k) => {
-                        // 같은 레벨 부모가 N개면 이 부모는 1/N만 차지 (합산 시 1배가 됨)
-                        const numPars = pa[k].filter(p => comp.includes(p) && lv[p] === lv[k] - 1).length;
-                        return s + (stW[k] || cellW) / Math.max(1, numPars);
-                    }, 0) + (row.length - 1) * H_GAP;
+                    const rw  = row.reduce((s, k) => s + (stW[k] || cellW), 0)
+                               + (row.length - 1) * H_GAP;
                     if (rw > maxW) maxW = rw;
                 }
                 stW[t] = Math.max(cellW, maxW);
