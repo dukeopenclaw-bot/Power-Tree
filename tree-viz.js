@@ -1003,6 +1003,9 @@ function autoLayout() {
         const placedBy = {};
 
         for (let l = 0; l < maxLv; l++) {
+            // 같은 레벨 내 왼→오른 순서로 처리 → 왼쪽 부모가 공유 자식 선점
+            byLv[l].sort((a, b) => (nodeMap[a]?.x || 0) - (nodeMap[b]?.x || 0));
+
             byLv[l].forEach(t => {
                 // 아직 배치되지 않은 자식만 처리 (먼저 처리된 부모가 "주 부모")
                 let kids = ch[t].filter(c => comp.includes(c) && lv[c] === lv[t] + 1 && !placed.has(c));
@@ -1038,12 +1041,14 @@ function autoLayout() {
                 kids.forEach(k => { placed.add(k); placedBy[k] = t; });
             });
 
-            // 다중 부모 노드 위치 보정: 모든 부모 X의 단순 평균으로 이동
-            // (주 부모 편향 제거 → 어느 부모가 먼저 배치하든 결과가 균등해짐)
+            // 다중 부모 노드 위치 보정:
+            // 직전 레벨뿐 아니라 레벨을 건너뛰는 직접 부모(스킵 엣지)도 포함
+            // 레벨 차이 역수를 가중치로 → 가까운 부모일수록 더 큰 영향
             byLv[l + 1].forEach(t => {
-                const pars = pa[t].filter(p => comp.includes(p) && lv[p] === lv[t] - 1);
-                if (pars.length <= 1) return;
-                nodeMap[t].x = pars.reduce((s, p) => s + nodeMap[p].x, 0) / pars.length;
+                const allPars = pa[t].filter(p => comp.includes(p) && lv[p] < lv[t] && nodeMap[p]);
+                if (allPars.length <= 1) return;
+                const totalW = allPars.reduce((s, p) => s + 1 / (lv[t] - lv[p]), 0);
+                nodeMap[t].x = allPars.reduce((s, p) => s + nodeMap[p].x / (lv[t] - lv[p]), 0) / totalW;
             });
         }
 
