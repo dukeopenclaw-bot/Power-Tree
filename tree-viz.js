@@ -757,15 +757,24 @@ function changeColCount(delta) {
 const BATCH_COLS = 6;
 
 function addTagsBatch(tags) {
-    const bases = tags.map(getBaseName).filter(b => b && !nodeMap[b]);
-    if (bases.length === 0) return;
+    const allBases = tags.map(getBaseName).filter(Boolean);
+    const bases    = allBases.filter(b => !nodeMap[b]);
+    // 포커스 대상: 새로 추가되는 첫 노드, 없으면 검색한 첫 노드(이미 화면에 있음)
+    const focusTarget = bases.length ? bases[0] : allBases[0];
+
+    // 모두 이미 화면에 있음 → 추가 없이 해당 위치로 포커스만
+    if (bases.length === 0) {
+        if (focusTarget && nodeMap[focusTarget]) focusNode(focusTarget);
+        return;
+    }
 
     // 단일 태그: 항상 full 트리로 (from/to 포함)
     if (bases.length === 1) {
         if (Object.keys(nodeMap).length === 0) {
-            drawTree(bases[0]);
+            drawTree(bases[0]); // 첫 트리: 전체 자동 맞춤
         } else {
             _addSingleWithConnections(bases[0]);
+            focusNode(focusTarget);
         }
         return;
     }
@@ -829,6 +838,7 @@ function addTagsBatch(tags) {
     const svg = d3.select("#tree-svg");
     const cur = svgZoom ? d3.zoomTransform(svg.node()) : null;
     renderTree(cur);
+    if (focusTarget && nodeMap[focusTarget]) focusNode(focusTarget);
 }
 
 // ── 11b. 단일 태그를 기존 트리 아래에 from/to 포함해서 추가 ───
@@ -873,6 +883,29 @@ function _addSingleWithConnections(base) {
 
 function addTagToTree(tag) {
     addTagsBatch([tag]);
+}
+
+// ── 특정 노드를 화면 중앙으로 포커스 (현재 줌 레벨 유지 + 강조) ──
+function focusNode(tag) {
+    const node = nodeMap[tag];
+    if (!node || !svgZoom) return;
+    const svg = d3.select("#tree-svg");
+    const c   = document.getElementById("canvas-container");
+    const cW  = c.clientWidth  || 800;
+    const cH  = c.clientHeight || 600;
+    const cur = d3.zoomTransform(svg.node());
+    // 너무 축소돼 있으면 적당히 확대, 아니면 현재 배율 유지
+    const k   = Math.max(cur.k || 1, 0.7);
+    const tx  = cW / 2 - k * node.x;
+    const ty  = cH / 2 - k * node.y;
+    svg.transition().duration(450)
+        .call(svgZoom.transform, d3.zoomIdentity.translate(tx, ty).scale(k));
+
+    // 포커스 노드 강조
+    d3.selectAll(".node").classed("node-selected", false);
+    d3.selectAll(".node").filter(function () {
+        return d3.select(this).attr("data-tag") === tag;
+    }).classed("node-selected", true);
 }
 
 // ── 11c. 선택장비 지정 (기존 노드 유지, tgt + 타입만 변경) ──────

@@ -176,6 +176,9 @@ function addSelected() {
   collapseSidebar();
   const tags = [...selectedTags];
   selectedTags.clear();
+  // 검색창 초기화 (추가 후 다음 검색을 위해)
+  if (searchInput) searchInput.value = "";
+  if (resultList)  resultList.innerHTML = "";
   setTimeout(() => addTagsBatch(tags), 280);
 }
 
