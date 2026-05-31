@@ -253,8 +253,6 @@ function applyPowerColors() {
     applyEdgeColors();
 }
 
-let showCrossEdges = false;
-function setCrossEdges(val) { showCrossEdges = val; applyEdgeColors(); }
 
 function applyEdgeColors() {
     d3.selectAll(".link").each(function() {
