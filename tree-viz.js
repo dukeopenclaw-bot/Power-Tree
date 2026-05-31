@@ -959,15 +959,11 @@ function autoLayout() {
         const byLv  = Array.from({ length: maxLv + 1 }, () => []);
         comp.forEach(t => byLv[lv[t]].push(t));
 
-        // colCount 행 수를 반영한 레벨별 실제 Y 시작 위치
+        // 레벨별 Y 시작 위치 — 레벨 내 row 분할 없이 항상 단일 행
+        // (row 분할 시 자식이 상·하 레벨 사이에 끼어 '파고들기' 시각 혼란 발생)
         const levelY = [0];
         for (let l = 1; l <= maxLv; l++) {
-            let maxRows = 1;
-            byLv[l - 1].forEach(pTag => {
-                const kids = ch[pTag].filter(c => comp.includes(c) && lv[c] === l);
-                if (kids.length) maxRows = Math.max(maxRows, Math.ceil(kids.length / colCount));
-            });
-            levelY.push(levelY[l - 1] + (maxRows - 1) * (NODE_H + V_GAP * 0.6) + LEVEL_H);
+            levelY.push(levelY[l - 1] + LEVEL_H);
         }
 
         // ── Phase 1: 서브트리 너비 계산 (하→상) ────────────────────
@@ -979,14 +975,10 @@ function autoLayout() {
             byLv[l].forEach(t => {
                 const kids = ch[t].filter(c => comp.includes(c) && lv[c] === lv[t] + 1);
                 if (!kids.length) { stW[t] = cellW; return; }
-                let maxW = 0;
-                for (let r = 0, n = kids.length; r < Math.ceil(n / colCount); r++) {
-                    const row = kids.slice(r * colCount, (r + 1) * colCount);
-                    const rw  = row.reduce((s, k) => s + (stW[k] || cellW), 0)
-                               + (row.length - 1) * H_GAP;
-                    if (rw > maxW) maxW = rw;
-                }
-                stW[t] = Math.max(cellW, maxW);
+                // 단일 행 배치이므로 자식 전체 너비 합산
+                const rw = kids.reduce((s, k) => s + (stW[k] || cellW), 0)
+                         + (kids.length - 1) * H_GAP;
+                stW[t] = Math.max(cellW, rw);
             });
         }
 
@@ -1062,16 +1054,15 @@ function autoLayout() {
                     kids = grouped;
                 }
 
-                const rows = Math.ceil(kids.length / colCount);
-                for (let r = 0; r < rows; r++) {
-                    const row = kids.slice(r * colCount, (r + 1) * colCount);
-                    const rw  = row.reduce((s, k) => s + (stW[k] || cellW), 0)
-                              + (row.length - 1) * H_GAP;
+                // 자식 전체를 단일 행에 배치 — row 분할 없음
+                {
+                    const rw = kids.reduce((s, k) => s + (stW[k] || cellW), 0)
+                             + (kids.length - 1) * H_GAP;
                     let cx = nodeMap[t].x - rw / 2;
-                    row.forEach(k => {
+                    kids.forEach(k => {
                         const kw = stW[k] || cellW;
                         nodeMap[k].x = cx + kw / 2;
-                        nodeMap[k].y = levelY[lv[k]] + r * (NODE_H + V_GAP * 0.6);
+                        nodeMap[k].y = levelY[lv[k]];
                         cx += kw + H_GAP;
                     });
                 }
