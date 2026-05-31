@@ -1,4 +1,4 @@
-const CACHE_NAME = 'power-tree-v61';
+const CACHE_NAME = 'power-tree-v62';
 const STATIC_ASSETS = [
   './index.html',
   './style.css',
@@ -9,6 +9,8 @@ const STATIC_ASSETS = [
 ];
 
 self.addEventListener('install', (event) => {
+  // 새 SW를 즉시 대기 상태에서 활성화로 전환 (옛 SW가 닫힐 때까지 기다리지 않음)
+  self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME).then(cache => cache.addAll(STATIC_ASSETS))
   );
