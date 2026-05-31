@@ -1160,6 +1160,33 @@ function autoLayout() {
             recenterShared(l + 1); // 부모 이동 후 공유 자식 위치를 부모 평균으로 재보정
         }
 
+        // ── 안정화 패스: 탑다운 → 바텀업 추가 실행 (잔여 파고들기 제거) ──
+        // Phase 4 바텀업 패스가 상위 이동을 하위에 미반영하는 경우 보정
+        const recenterExclusive = l => {
+            byLv[l].forEach(t => {
+                const kids = ch[t].filter(c => {
+                    if (!comp.includes(c) || lv[c] !== lv[t] + 1 || placedBy[c] !== t) return false;
+                    return (pa[c] || []).filter(p => comp.includes(p) && lv[p] === lv[c] - 1).length === 1;
+                });
+                if (!kids.length) return;
+                const left  = Math.min(...kids.map(c => nodeMap[c].x - (stW[c] || cellW) / 2));
+                const right = Math.max(...kids.map(c => nodeMap[c].x + (stW[c] || cellW) / 2));
+                nodeMap[t].x = (left + right) / 2;
+            });
+        };
+        // 탑다운: 루트부터 겹침 해소 전파
+        for (let l = 0; l <= maxLv; l++) {
+            resolveByRow(byLv[l]);
+            recenterShared(l);
+        }
+        // 바텀업: 하위 확정 후 부모 재중앙 + 겹침 재해소
+        for (let l = maxLv - 1; l >= 0; l--) {
+            resolveByRow(byLv[l + 1]);
+            recenterExclusive(l);
+            resolveByRow(byLv[l]);
+            recenterShared(l + 1);
+        }
+
         // 컴포넌트를 globalX 기준으로 이동
         const minX = Math.min(...comp.map(t => nodeMap[t].x - nodeMap[t].w / 2));
         const shift = globalX - minX;
@@ -1174,36 +1201,6 @@ function autoLayout() {
     tags.forEach(t => { nodeMap[t].x += offsetX; nodeMap[t].y += 80; });
 
     renderTree(null);
-}
-
-// 같은 레벨 노드 겹침 해소 (정렬 후 앞뒤로 밀어냄)
-function _layoutResolveOverlap(group, cellW, ch) {
-    if (group.length <= 1) return;
-    group.sort((a, b) => nodeMap[a].x - nodeMap[b].x);
-
-    // 노드와 그 모든 하위 자손을 delta만큼 이동
-    const shiftSubtree = (root, delta) => {
-        const q = [root];
-        const seen = new Set([root]);
-        while (q.length) {
-            const n = q.shift();
-            nodeMap[n].x += delta;
-            (ch?.[n] || []).forEach(c => {
-                if (!seen.has(c) && nodeMap[c]) { seen.add(c); q.push(c); }
-            });
-        }
-    };
-
-    // 앞에서 뒤로: 겹치면 서브트리 전체를 오른쪽으로 밀기
-    for (let i = 1; i < group.length; i++) {
-        const delta = nodeMap[group[i - 1]].x + cellW - nodeMap[group[i]].x;
-        if (delta > 0) shiftSubtree(group[i], delta);
-    }
-    // 뒤에서 앞으로: 서브트리 전체를 왼쪽으로 당겨 균형 유지
-    for (let i = group.length - 2; i >= 0; i--) {
-        const delta = nodeMap[group[i + 1]].x - cellW - nodeMap[group[i]].x;
-        if (delta < 0) shiftSubtree(group[i], delta);
-    }
 }
 
 
