@@ -1273,6 +1273,10 @@ function autoLayout() {
             resolveByRow(byLv[l]);
             recenterShared(l + 1);
         }
+        // 최종 겹침 정리: recenterShared 이후 발생한 잔여 겹침 제거
+        for (let l = 0; l <= maxLv; l++) {
+            resolveByRow(byLv[l]);
+        }
 
         // 컴포넌트를 globalX 기준으로 이동
         const minX = Math.min(...comp.map(t => nodeMap[t].x - nodeMap[t].w / 2));
