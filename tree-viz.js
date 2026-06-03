@@ -1126,14 +1126,24 @@ function autoLayout() {
                 kids.forEach(k => { placed.add(k); placedBy[k] = t; });
             });
 
-            // 다중 직접 부모(lv[p] = lv[t]-1) 노드 위치 보정: 직접 부모들의 평균
-            // ※ 레벨 스킵 부모(lv[p] < lv[t]-1)는 위치 보정에 포함하지 않음
-            //   → 스킵 부모 쪽으로 끌려가 다른 서브트리 사이에 침투하는 현상 방지
-            byLv[l + 1].forEach(t => {
-                const directPars = pa[t].filter(p => comp.includes(p) && lv[p] === lv[t] - 1 && nodeMap[p]);
-                if (directPars.length <= 1) return;
-                nodeMap[t].x = directPars.reduce((s, p) => s + nodeMap[p].x, 0) / directPars.length;
-            });
+            // 다중 직접 부모 노드 위치 보정: 동일 부모 세트 그룹을 강체 이동
+            // (Phase 3 시점은 하위 레벨 미배치 → 서브트리 이동 없이 현재 레벨만 보정)
+            {
+                const g3 = new Map();
+                byLv[l + 1].forEach(t => {
+                    const dPars = pa[t].filter(p => comp.includes(p) && lv[p] === lv[t] - 1 && nodeMap[p]);
+                    if (dPars.length <= 1) return;
+                    const key = dPars.slice().sort().join('\0');
+                    if (!g3.has(key)) g3.set(key, { pars: dPars, nodes: [] });
+                    g3.get(key).nodes.push(t);
+                });
+                g3.forEach(({ pars, nodes: gn }) => {
+                    const targetX = pars.reduce((s, p) => s + nodeMap[p].x, 0) / pars.length;
+                    const gc = gn.reduce((s, n) => s + nodeMap[n].x, 0) / gn.length;
+                    const delta = targetX - gc;
+                    gn.forEach(n => { nodeMap[n].x += delta; });
+                });
+            }
         }
 
         // ── Phase 4: 상향 패스 (겹침 해소 → 부모 재중앙) ─────────────
@@ -1179,11 +1189,35 @@ function autoLayout() {
         };
 
         // 공유 자식을 직접 부모들의 평균 x로 재보정
+        // 같은 부모 세트를 공유하는 자식이 여럿이면 "그룹 전체를 강체 이동" 하여
+        // 개별 이동 시 모두 동일 좌표로 충돌하는 현상을 방지.
+        // 이동 시 소유 서브트리도 동반 이동 → 부모-자식 연결선이 어긋나지 않음.
         const recenterShared = level => {
+            const groups = new Map();
             (byLv[level] || []).forEach(t => {
-                const directPars = (pa[t] || []).filter(p => comp.includes(p) && lv[p] === lv[t] - 1 && nodeMap[p]);
-                if (directPars.length <= 1) return;
-                nodeMap[t].x = directPars.reduce((s, p) => s + nodeMap[p].x, 0) / directPars.length;
+                const dPars = (pa[t] || []).filter(p => comp.includes(p) && lv[p] === lv[t] - 1 && nodeMap[p]);
+                if (dPars.length <= 1) return;
+                const key = dPars.slice().sort().join('\0');
+                if (!groups.has(key)) groups.set(key, { pars: dPars, nodes: [] });
+                groups.get(key).nodes.push(t);
+            });
+            groups.forEach(({ pars, nodes: gn }) => {
+                const targetX = pars.reduce((s, p) => s + nodeMap[p].x, 0) / pars.length;
+                const gc      = gn.reduce((s, n) => s + nodeMap[n].x, 0) / gn.length;
+                const delta   = targetX - gc;
+                if (Math.abs(delta) < 0.5) return;
+                gn.forEach(n => {
+                    nodeMap[n].x += delta;
+                    // 소유 서브트리 동반 이동 (공유 자식의 자식들도 함께)
+                    const q = ch[n].filter(c => comp.includes(c) && owner[c] === n);
+                    const seen = new Set(q);
+                    while (q.length) {
+                        const c = q.shift();
+                        nodeMap[c].x += delta;
+                        ch[c].filter(x => comp.includes(x) && owner[x] === c && !seen.has(x))
+                             .forEach(x => { seen.add(x); q.push(x); });
+                    }
+                });
             });
         };
 

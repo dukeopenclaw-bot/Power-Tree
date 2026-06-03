@@ -35,7 +35,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
 // ── 데이터 로드 ───────────────────────────────────────
 async function loadData() {
-  showStatus("⚡ 데이터 로딩 중...", "loading");
+  // SW 업데이트 리로드 시 로딩 메시지 생략 → 이중 로딩으로 보이는 현상 방지
+  const isSWRefresh = sessionStorage.getItem('_sw_refresh') === '1';
+  if (isSWRefresh) sessionStorage.removeItem('_sw_refresh');
+  if (!isSWRefresh) showStatus("⚡ 데이터 로딩 중...", "loading");
+
   try {
     const res = await fetch(GAS_URL, { redirect: "follow" });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -51,8 +55,10 @@ async function loadData() {
       return true;
     });
 
-    showStatus(`✅ ${powerData.length}개 회로 로드 완료`, "success");
-    setTimeout(() => hideStatus(), 3000);
+    if (!isSWRefresh) {
+      showStatus(`✅ ${powerData.length}개 회로 로드 완료`, "success");
+      setTimeout(() => hideStatus(), 3000);
+    }
     initSearch();
   } catch (err) {
     console.error("[PowerTree] 데이터 로드 실패:", err);

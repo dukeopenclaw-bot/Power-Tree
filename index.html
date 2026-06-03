@@ -30,7 +30,7 @@
       <div class="sidebar-header">
         <div class="sidebar-title">
           <h1>Power Tree</h1>
-          <span class="version">V8.3</span>
+          <span class="version">V8.4</span>
         </div>
         <button id="btn-reset" onclick="resetTree()" title="초기화">↺</button>
       </div>
@@ -139,10 +139,12 @@
       .catch(err => console.warn('SW 등록 실패:', err));
 
     // 새 SW가 제어권을 잡으면 페이지 자동 새로고침 → 항상 최신 코드 적용
+    // sessionStorage 플래그로 SW 리로드임을 표시 → api.js에서 데이터 로딩 메시지 생략
     let _swReloaded = false;
     navigator.serviceWorker.addEventListener('controllerchange', () => {
       if (_swReloaded) return;
       _swReloaded = true;
+      sessionStorage.setItem('_sw_refresh', '1');
       window.location.reload();
     });
   }
