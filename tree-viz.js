@@ -990,46 +990,39 @@ function autoLayout() {
         const byLv  = Array.from({ length: maxLv + 1 }, () => []);
         comp.forEach(t => byLv[lv[t]].push(t));
 
-        // ── 공유 자식 소유권 결정 ────────────────────────────────
-        // 직접 부모가 여럿인 노드(이중급전 등 공유 자식)는 "소유 부모" 하나에만 귀속.
-        // → 폭 계산(stW)·실제 배치(Phase 3)를 소유 부모에만 반영하여,
-        //   부모마다 공유 자식의 full 폭을 중복 예약해 가로로 과도하게 벌어지는 현상 제거.
-        //   (비소유 부모는 폭 예약 0 → 빈 공간 없이 컴팩트하게 배치)
-        //   최종 위치는 Phase 4 recenterShared 가 직접 부모들의 평균 x로 재보정.
-        const owner = {};
-        comp.forEach(c => {
-            const directPars = pa[c].filter(p => comp.includes(p) && lv[p] === lv[c] - 1);
-            if (directPars.length) owner[c] = directPars[0]; // 첫 직접 부모를 소유자로(결정적)
-        });
+        // ── 공유 자식 판별 헬퍼 ─────────────────────────────────────
+        // 직접 부모가 2명 이상인 노드 = 공유 자식 (이중급전 패널 등)
+        const numDirPars = c =>
+            (pa[c] || []).filter(p => comp.includes(p) && lv[p] === lv[c] - 1).length;
 
-        // 레벨별 Y 시작 위치 (colCount 행 수 반영)
+        // 레벨별 Y 시작 위치 (colCount 행 수 반영, 단독 부모 자식 기준)
         const levelY = [0];
         for (let l = 1; l <= maxLv; l++) {
             let maxRows = 1;
             byLv[l - 1].forEach(pTag => {
-                // 소유한 자식만 이 부모가 그림 → 행 수 계산도 소유 자식 기준
-                const kids = ch[pTag].filter(c => comp.includes(c) && lv[c] === l && owner[c] === pTag);
+                // 단독 부모 자식만 행 수 계산 (공유 자식은 Phase 3b에서 별도 배치)
+                const kids = ch[pTag].filter(c => comp.includes(c) && lv[c] === l && numDirPars(c) === 1);
                 if (kids.length) maxRows = Math.max(maxRows, Math.ceil(kids.length / colCount));
             });
             levelY.push(levelY[l - 1] + (maxRows - 1) * (NODE_H + V_GAP * 0.6) + LEVEL_H);
         }
 
         // ── Phase 1: 서브트리 너비 계산 (하→상) ────────────────────
-        // 각 노드의 전체 하위 서브트리를 colCount 그리드로 펼칠 때 필요한 최소 너비
-        // 소유한 자식만 폭에 반영(owner[c] === t) → Phase 3에서 실제로 배치하는 자식과 일치.
-        // 공유 자식을 소유 부모 한쪽에만 full 폭으로 예약하므로,
-        // (구) 1/N 할인 시의 침투 버그도, (구) 모든 부모가 full 예약 시의 과도한 가로 벌어짐도 동시 해결.
+        // 단독 부모 자식: full stW 반영 (Phase 3에서 이 부모 아래에 직접 배치)
+        // 공유 자식(직접 부모 N명): stW/N 반영 (부모 간격이 공유 자식 너비에 비례하도록)
+        //   → Phase 3b에서 공유 자식은 부모 평균 위치에 별도 배치하므로 침투 없음
         const stW = {};
         for (let l = maxLv; l >= 0; l--) {
             byLv[l].forEach(t => {
-                const kids = ch[t].filter(c => comp.includes(c) && lv[c] === lv[t] + 1 && owner[c] === t);
+                const kids = ch[t].filter(c => comp.includes(c) && lv[c] === lv[t] + 1);
                 if (!kids.length) { stW[t] = cellW; return; }
-                // colCount 행 중 가장 넓은 행이 서브트리 너비
                 let maxW = 0;
                 for (let r = 0, n = kids.length; r < Math.ceil(n / colCount); r++) {
                     const row = kids.slice(r * colCount, (r + 1) * colCount);
-                    const rw = row.reduce((s, k) => s + (stW[k] || cellW), 0)
-                             + (row.length - 1) * H_GAP;
+                    const rw = row.reduce((s, k) => {
+                        const N = numDirPars(k);
+                        return s + (stW[k] || cellW) / Math.max(1, N);
+                    }, 0) + (row.length - 1) * H_GAP;
                     if (rw > maxW) maxW = rw;
                 }
                 stW[t] = Math.max(cellW, maxW);
@@ -1057,8 +1050,10 @@ function autoLayout() {
 
             byLv[l].forEach(t => {
                 // 소유한 자식만 이 부모가 배치 (공유 자식은 owner 부모 한 곳에서만)
+                // 단독 부모(직접 부모 1명)인 자식만 여기서 배치
+                // 공유 자식(직접 부모 ≥2)은 Phase 3b에서 부모 평균 위치에 별도 배치
                 let kids = ch[t].filter(c => comp.includes(c) && lv[c] === lv[t] + 1
-                                              && owner[c] === t && !placed.has(c));
+                                              && numDirPars(c) === 1 && !placed.has(c));
                 if (!kids.length) return;
 
                 // 선 교차 최소화 (barycenter 휴리스틱):
@@ -1126,22 +1121,32 @@ function autoLayout() {
                 kids.forEach(k => { placed.add(k); placedBy[k] = t; });
             });
 
-            // 다중 직접 부모 노드 위치 보정: 동일 부모 세트 그룹을 강체 이동
-            // (Phase 3 시점은 하위 레벨 미배치 → 서브트리 이동 없이 현재 레벨만 보정)
+            // ── Phase 3b: 공유 자식 배치 ──────────────────────────────
+            // 직접 부모가 여럿인 노드는 위 Phase 3에서 건너뛰었으므로 여기서 배치.
+            // 같은 부모 세트를 공유하는 노드를 그룹으로 묶어 부모 평균 x에 나란히 배치.
             {
-                const g3 = new Map();
+                const sg = new Map();
                 byLv[l + 1].forEach(t => {
+                    if (placed.has(t)) return;
                     const dPars = pa[t].filter(p => comp.includes(p) && lv[p] === lv[t] - 1 && nodeMap[p]);
                     if (dPars.length <= 1) return;
                     const key = dPars.slice().sort().join('\0');
-                    if (!g3.has(key)) g3.set(key, { pars: dPars, nodes: [] });
-                    g3.get(key).nodes.push(t);
+                    if (!sg.has(key)) sg.set(key, { pars: dPars, nodes: [] });
+                    sg.get(key).nodes.push(t);
                 });
-                g3.forEach(({ pars, nodes: gn }) => {
-                    const targetX = pars.reduce((s, p) => s + nodeMap[p].x, 0) / pars.length;
-                    const gc = gn.reduce((s, n) => s + nodeMap[n].x, 0) / gn.length;
-                    const delta = targetX - gc;
-                    gn.forEach(n => { nodeMap[n].x += delta; });
+                sg.forEach(({ pars, nodes: gn }) => {
+                    const centerX = pars.reduce((s, p) => s + nodeMap[p].x, 0) / pars.length;
+                    const centerY = levelY[lv[gn[0]]];
+                    const totalW  = gn.reduce((s, n) => s + (stW[n] || cellW), 0) + (gn.length - 1) * H_GAP;
+                    let cx = centerX - totalW / 2;
+                    gn.forEach(n => {
+                        const nw = stW[n] || cellW;
+                        nodeMap[n].x = cx + nw / 2;
+                        nodeMap[n].y = centerY;
+                        cx += nw + H_GAP;
+                        placed.add(n);
+                        placedBy[n] = pars[0];
+                    });
                 });
             }
         }
@@ -1208,13 +1213,13 @@ function autoLayout() {
                 if (Math.abs(delta) < 0.5) return;
                 gn.forEach(n => {
                     nodeMap[n].x += delta;
-                    // 소유 서브트리 동반 이동 (공유 자식의 자식들도 함께)
-                    const q = ch[n].filter(c => comp.includes(c) && owner[c] === n);
+                    // 단독 부모 서브트리 동반 이동
+                    const q = ch[n].filter(c => comp.includes(c) && numDirPars(c) === 1);
                     const seen = new Set(q);
                     while (q.length) {
                         const c = q.shift();
                         nodeMap[c].x += delta;
-                        ch[c].filter(x => comp.includes(x) && owner[x] === c && !seen.has(x))
+                        ch[c].filter(x => comp.includes(x) && numDirPars(x) === 1 && !seen.has(x))
                              .forEach(x => { seen.add(x); q.push(x); });
                     }
                 });
