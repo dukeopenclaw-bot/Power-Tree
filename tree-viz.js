@@ -1183,11 +1183,13 @@ function autoLayout() {
                 };
 
                 for (let i = 1; i < row.length; i++) {
-                    const delta = nodeMap[row[i - 1]].x + cellW - nodeMap[row[i]].x;
+                    const minDist = ((stW[row[i - 1]] || cellW) + (stW[row[i]] || cellW)) / 2;
+                    const delta = nodeMap[row[i - 1]].x + minDist - nodeMap[row[i]].x;
                     if (delta > 0) shiftSubtree(row[i], delta);
                 }
                 for (let i = row.length - 2; i >= 0; i--) {
-                    const delta = nodeMap[row[i + 1]].x - cellW - nodeMap[row[i]].x;
+                    const minDist = ((stW[row[i + 1]] || cellW) + (stW[row[i]] || cellW)) / 2;
+                    const delta = nodeMap[row[i + 1]].x - minDist - nodeMap[row[i]].x;
                     if (delta < 0) shiftSubtree(row[i], delta);
                 }
             });
@@ -1273,9 +1275,18 @@ function autoLayout() {
             resolveByRow(byLv[l]);
             recenterShared(l + 1);
         }
-        // 최종 겹침 정리: recenterShared 이후 발생한 잔여 겹침 제거
-        for (let l = 0; l <= maxLv; l++) {
-            resolveByRow(byLv[l]);
+        // 최종 겹침 정리 (2회): stW 기반 간격 확장 후 잔여 겹침 제거
+        for (let pass = 0; pass < 2; pass++) {
+            for (let l = 0; l <= maxLv; l++) {
+                resolveByRow(byLv[l]);
+                recenterShared(l);
+            }
+            for (let l = maxLv - 1; l >= 0; l--) {
+                resolveByRow(byLv[l + 1]);
+                recenterExclusive(l);
+                resolveByRow(byLv[l]);
+                recenterShared(l + 1);
+            }
         }
 
         // 컴포넌트를 globalX 기준으로 이동
