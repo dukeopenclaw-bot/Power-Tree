@@ -990,12 +990,25 @@ function autoLayout() {
         const byLv  = Array.from({ length: maxLv + 1 }, () => []);
         comp.forEach(t => byLv[lv[t]].push(t));
 
+        // ── 공유 자식 소유권 결정 ────────────────────────────────
+        // 직접 부모가 여럿인 노드(이중급전 등 공유 자식)는 "소유 부모" 하나에만 귀속.
+        // → 폭 계산(stW)·실제 배치(Phase 3)를 소유 부모에만 반영하여,
+        //   부모마다 공유 자식의 full 폭을 중복 예약해 가로로 과도하게 벌어지는 현상 제거.
+        //   (비소유 부모는 폭 예약 0 → 빈 공간 없이 컴팩트하게 배치)
+        //   최종 위치는 Phase 4 recenterShared 가 직접 부모들의 평균 x로 재보정.
+        const owner = {};
+        comp.forEach(c => {
+            const directPars = pa[c].filter(p => comp.includes(p) && lv[p] === lv[c] - 1);
+            if (directPars.length) owner[c] = directPars[0]; // 첫 직접 부모를 소유자로(결정적)
+        });
+
         // 레벨별 Y 시작 위치 (colCount 행 수 반영)
         const levelY = [0];
         for (let l = 1; l <= maxLv; l++) {
             let maxRows = 1;
             byLv[l - 1].forEach(pTag => {
-                const kids = ch[pTag].filter(c => comp.includes(c) && lv[c] === l);
+                // 소유한 자식만 이 부모가 그림 → 행 수 계산도 소유 자식 기준
+                const kids = ch[pTag].filter(c => comp.includes(c) && lv[c] === l && owner[c] === pTag);
                 if (kids.length) maxRows = Math.max(maxRows, Math.ceil(kids.length / colCount));
             });
             levelY.push(levelY[l - 1] + (maxRows - 1) * (NODE_H + V_GAP * 0.6) + LEVEL_H);
@@ -1003,12 +1016,13 @@ function autoLayout() {
 
         // ── Phase 1: 서브트리 너비 계산 (하→상) ────────────────────
         // 각 노드의 전체 하위 서브트리를 colCount 그리드로 펼칠 때 필요한 최소 너비
-        // 공유 자식도 full stW 반영 — Phase 3에서 실제 배치 시 전체 너비를 사용하기 때문에
-        // 1/N 할인을 적용하면 부모의 할당 공간이 실제 배치 너비보다 좁아져 다른 서브트리에 침투하는 버그 발생
+        // 소유한 자식만 폭에 반영(owner[c] === t) → Phase 3에서 실제로 배치하는 자식과 일치.
+        // 공유 자식을 소유 부모 한쪽에만 full 폭으로 예약하므로,
+        // (구) 1/N 할인 시의 침투 버그도, (구) 모든 부모가 full 예약 시의 과도한 가로 벌어짐도 동시 해결.
         const stW = {};
         for (let l = maxLv; l >= 0; l--) {
             byLv[l].forEach(t => {
-                const kids = ch[t].filter(c => comp.includes(c) && lv[c] === lv[t] + 1);
+                const kids = ch[t].filter(c => comp.includes(c) && lv[c] === lv[t] + 1 && owner[c] === t);
                 if (!kids.length) { stW[t] = cellW; return; }
                 // colCount 행 중 가장 넓은 행이 서브트리 너비
                 let maxW = 0;
@@ -1042,8 +1056,9 @@ function autoLayout() {
             byLv[l].sort((a, b) => (nodeMap[a]?.x || 0) - (nodeMap[b]?.x || 0));
 
             byLv[l].forEach(t => {
-                // 아직 배치되지 않은 자식만 처리 (먼저 처리된 부모가 "주 부모")
-                let kids = ch[t].filter(c => comp.includes(c) && lv[c] === lv[t] + 1 && !placed.has(c));
+                // 소유한 자식만 이 부모가 배치 (공유 자식은 owner 부모 한 곳에서만)
+                let kids = ch[t].filter(c => comp.includes(c) && lv[c] === lv[t] + 1
+                                              && owner[c] === t && !placed.has(c));
                 if (!kids.length) return;
 
                 // 선 교차 최소화 (barycenter 휴리스틱):
