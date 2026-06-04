@@ -1123,7 +1123,8 @@ function autoLayout() {
 
             // ── Phase 3b: 공유 자식 배치 ──────────────────────────────
             // 직접 부모가 여럿인 노드는 위 Phase 3에서 건너뛰었으므로 여기서 배치.
-            // 같은 부모 세트를 공유하는 노드를 그룹으로 묶어 부모 평균 x에 나란히 배치.
+            // 이미 배치된 노드들 사이의 빈 틈 중 부모 평균에 가장 가까운 위치에 배치
+            // (단순 부모 평균에 놓으면 단독 자식과 즉시 충돌하는 현상 방지).
             {
                 const sg = new Map();
                 byLv[l + 1].forEach(t => {
@@ -1135,10 +1136,39 @@ function autoLayout() {
                     sg.get(key).nodes.push(t);
                 });
                 sg.forEach(({ pars, nodes: gn }) => {
-                    const centerX = pars.reduce((s, p) => s + nodeMap[p].x, 0) / pars.length;
+                    const idealX  = pars.reduce((s, p) => s + nodeMap[p].x, 0) / pars.length;
                     const centerY = levelY[lv[gn[0]]];
-                    const totalW  = gn.reduce((s, n) => s + (stW[n] || cellW), 0) + (gn.length - 1) * H_GAP;
-                    let cx = centerX - totalW / 2;
+                    const groupW  = gn.reduce((s, n) => s + (stW[n] || cellW), 0) + (gn.length - 1) * H_GAP;
+
+                    // 같은 y 행에 이미 배치된 노드들
+                    const existing = byLv[l + 1]
+                        .filter(t => placed.has(t) && nodeMap[t] && Math.round(nodeMap[t].y) === Math.round(centerY))
+                        .sort((a, b) => nodeMap[a].x - nodeMap[b].x);
+
+                    let bestX = idealX;
+                    if (existing.length > 0) {
+                        // 틈 목록: 첫 노드 왼쪽, 연속 쌍 사이, 마지막 노드 오른쪽
+                        const slots = [
+                            [null, existing[0]],
+                            ...existing.slice(0, -1).map((a, i) => [a, existing[i + 1]]),
+                            [existing[existing.length - 1], null]
+                        ];
+                        let minD = Infinity;
+                        for (const [L, R] of slots) {
+                            const lo  = L ? nodeMap[L].x + (stW[L] || cellW) / 2 : -Infinity;
+                            const hi  = R ? nodeMap[R].x - (stW[R] || cellW) / 2 : +Infinity;
+                            const cLo = lo === -Infinity ? -Infinity : lo + groupW / 2;
+                            const cHi = hi === +Infinity ? +Infinity : hi - groupW / 2;
+                            if (cLo !== -Infinity && cHi !== +Infinity && cLo > cHi) continue;
+                            const c = cLo === -Infinity ? Math.min(cHi, idealX) :
+                                      cHi === +Infinity ? Math.max(cLo, idealX) :
+                                      Math.max(cLo, Math.min(cHi, idealX));
+                            const d = Math.abs(c - idealX);
+                            if (d < minD) { minD = d; bestX = c; }
+                        }
+                    }
+
+                    let cx = bestX - groupW / 2;
                     gn.forEach(n => {
                         const nw = stW[n] || cellW;
                         nodeMap[n].x = cx + nw / 2;
