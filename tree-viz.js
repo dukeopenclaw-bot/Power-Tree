@@ -1211,7 +1211,24 @@ function autoLayout() {
             groups.forEach(({ pars, nodes: gn }) => {
                 const targetX = pars.reduce((s, p) => s + nodeMap[p].x, 0) / pars.length;
                 const gc      = gn.reduce((s, n) => s + nodeMap[n].x, 0) / gn.length;
-                const delta   = targetX - gc;
+                let delta     = targetX - gc;
+                if (Math.abs(delta) < 0.5) return;
+                // 인접 노드 방향으로 밀어넣지 않도록 이동량 제한 (oscillation 방지)
+                const gnSet      = new Set(gn);
+                const groupHalfW = (gn.reduce((s, n) => s + (stW[n] || cellW), 0) + (gn.length - 1) * H_GAP) / 2;
+                (byLv[level] || []).forEach(t => {
+                    if (gnSet.has(t) || !nodeMap[t]) return;
+                    const tHalfW = (stW[t] || cellW) / 2;
+                    if (nodeMap[t].x < gc) {
+                        // 왼쪽 이웃 → 왼쪽(음수) 이동 제한
+                        const minCenter = nodeMap[t].x + tHalfW + groupHalfW;
+                        if (delta < 0) delta = Math.max(delta, minCenter - gc);
+                    } else {
+                        // 오른쪽 이웃 → 오른쪽(양수) 이동 제한
+                        const maxCenter = nodeMap[t].x - tHalfW - groupHalfW;
+                        if (delta > 0) delta = Math.min(delta, maxCenter - gc);
+                    }
+                });
                 if (Math.abs(delta) < 0.5) return;
                 gn.forEach(n => {
                     nodeMap[n].x += delta;
@@ -1275,8 +1292,8 @@ function autoLayout() {
             resolveByRow(byLv[l]);
             recenterShared(l + 1);
         }
-        // 최종 겹침 정리 (2회): stW 기반 간격 확장 후 잔여 겹침 제거
-        for (let pass = 0; pass < 2; pass++) {
+        // 안정화 (3회): recenterShared 클램핑으로 oscillation 억제 후 수렴
+        for (let pass = 0; pass < 3; pass++) {
             for (let l = 0; l <= maxLv; l++) {
                 resolveByRow(byLv[l]);
                 recenterShared(l);
@@ -1287,6 +1304,10 @@ function autoLayout() {
                 resolveByRow(byLv[l]);
                 recenterShared(l + 1);
             }
+        }
+        // 최종 정리: 마지막 recenterShared 이후 잔여 겹침 제거
+        for (let l = 0; l <= maxLv; l++) {
+            resolveByRow(byLv[l]);
         }
 
         // 컴포넌트를 globalX 기준으로 이동
