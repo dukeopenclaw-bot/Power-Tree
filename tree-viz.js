@@ -1200,14 +1200,24 @@ function autoLayout() {
                 const shiftSubtree = (root, delta) => {
                     const q = [root];
                     const seen = new Set([root]);
+                    // 같은 부모가 배치한 같은 레벨 형제 행도 함께 이동 (멀티행 블록 정합성 유지)
+                    const par = placedBy[root];
+                    if (par) {
+                        (ch[par] || []).forEach(sib => {
+                            if (!seen.has(sib) && nodeMap[sib] && comp.includes(sib) &&
+                                lv[sib] === lv[root] && placedBy[sib] === par && numDirPars(sib) === 1) {
+                                seen.add(sib); q.push(sib);
+                            }
+                        });
+                    }
                     while (q.length) {
                         const n = q.shift();
                         nodeMap[n].x += delta;
                         (ch[n] || []).forEach(c => {
                             if (seen.has(c) || !nodeMap[c]) return;
                             // 공유 자식(직접 부모 ≥2)은 subtree 이동에서 제외 (이중 이동 방지)
-                            const numDirPars = (pa[c] || []).filter(p => comp.includes(p) && lv[p] === lv[c] - 1).length;
-                            if (numDirPars <= 1) { seen.add(c); q.push(c); }
+                            const ndp = (pa[c] || []).filter(p => comp.includes(p) && lv[p] === lv[c] - 1).length;
+                            if (ndp <= 1) { seen.add(c); q.push(c); }
                         });
                     }
                 };
