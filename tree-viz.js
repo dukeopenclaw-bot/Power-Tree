@@ -214,29 +214,38 @@ function expandNodeDownstream(tag) {
 }
 
 // ── 2b. 전원 상태 계산 및 색상 적용 ─────────────────────────────
+// LUN 맵(J열)에 데이터가 있으면 전원 인가(RED), 없으면 미인가(GREEN)
 function recalcPoweredState() {
-    // 1차: userOff 기준 초기화
+    const useLun = typeof lunMap !== "undefined" && lunMap.size > 0;
     Object.keys(nodeMap).forEach(tag => {
-        nodeMap[tag].powered = !nodeMap[tag].userOff;
+        if (nodeMap[tag].userOff) {
+            nodeMap[tag].powered = false;
+            return;
+        }
+        if (useLun) {
+            // LUN 기반: J열에 값이 있으면 전원 인가(true=RED), 없으면 미인가(false=GREEN)
+            nodeMap[tag].powered = lunMap.has(tag);
+        } else {
+            // LUN 데이터 없을 때: 기존 상위 전파 방식
+            nodeMap[tag].powered = true;
+        }
     });
-    // 2차: 상위 노드 전원 전파 (상위가 모두 꺼지면 하위도 꺼짐)
-    let changed = true;
-    while (changed) {
-        changed = false;
-        Object.keys(nodeMap).forEach(tag => {
-            if (nodeMap[tag].userOff) {
-                if (nodeMap[tag].powered !== false) { nodeMap[tag].powered = false; changed = true; }
-                return;
-            }
-            const upTags = edgeList.filter(e => e.toTag === tag).map(e => e.fromTag).filter(t => nodeMap[t]);
-            if (upTags.length === 0) {
-                // 루트 노드: 상위 없으면 켜짐
-                if (nodeMap[tag].powered !== true) { nodeMap[tag].powered = true; changed = true; }
-                return;
-            }
-            const anyOn = upTags.some(t => nodeMap[t].powered);
-            if (nodeMap[tag].powered !== anyOn) { nodeMap[tag].powered = anyOn; changed = true; }
-        });
+    // LUN 없을 때만 상위 전파 적용
+    if (!useLun) {
+        let changed = true;
+        while (changed) {
+            changed = false;
+            Object.keys(nodeMap).forEach(tag => {
+                if (nodeMap[tag].userOff) {
+                    if (nodeMap[tag].powered !== false) { nodeMap[tag].powered = false; changed = true; }
+                    return;
+                }
+                const upTags = edgeList.filter(e => e.toTag === tag).map(e => e.fromTag).filter(t => nodeMap[t]);
+                if (!upTags.length) return;
+                const anyOn = upTags.some(t => nodeMap[t].powered);
+                if (nodeMap[tag].powered !== anyOn) { nodeMap[tag].powered = anyOn; changed = true; }
+            });
+        }
     }
 }
 
@@ -1521,10 +1530,17 @@ function showNodeInfo(tag) {
     const listRow = (label, arr) => arr.length
         ? `<tr><th>${label}</th><td>${arr.join("<br>")}</td></tr>` : "";
 
+    // LUN 정보
+    const lun = (typeof lunMap !== "undefined") ? (lunMap.get(tag) || "") : "";
+    const poweredLabel = (typeof lunMap !== "undefined" && lunMap.size > 0)
+        ? (lun ? "✅ 전원 인가" : "⭕ 전원 미인가") : "";
+
     document.getElementById("modal-tag").textContent = tag;
     document.getElementById("modal-body").innerHTML = `
         <table class="info-table">
           <tbody>
+            ${poweredLabel ? `<tr><th>전원 상태</th><td>${poweredLabel}</td></tr>` : ""}
+            ${row("LUN", lun)}
             ${row("설명", desc)}
             ${row("위치", location)}
             ${listRow("공급원", sourceList)}

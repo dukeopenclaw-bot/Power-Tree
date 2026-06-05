@@ -14,6 +14,33 @@ const GAS_URL =
 
 // ── 전역 데이터 ───────────────────────────────────────
 let powerData = []; // tree-viz.js에서도 참조
+let lunMap    = new Map(); // baseTag → LUN 값 (J열 기반)
+
+// ── LUN 컬럼 키 캐시 ──────────────────────────────────
+let _lunColKey = null;
+
+function _getLunKey() {
+  if (_lunColKey !== null) return _lunColKey;
+  if (!powerData.length) return (_lunColKey = "");
+  _lunColKey = Object.keys(powerData[0]).find(k => /\blun\b/i.test(k.trim())) || "";
+  return _lunColKey;
+}
+
+/** LUN 맵 재구성: baseTag(To) → LUN 값 */
+function _buildLunMap() {
+  lunMap.clear();
+  const key = _getLunKey();
+  if (!key) return;
+  powerData.forEach(d => {
+    const lun = String(d[key] || "").trim();
+    if (!lun) return;
+    const tt  = String(d["Equipment Tag(To)"] || "").trim();
+    if (tt) {
+      const btt = typeof getBaseName === "function" ? getBaseName(tt) : tt;
+      if (!lunMap.has(btt)) lunMap.set(btt, lun);
+    }
+  });
+}
 
 // ── DOM 참조 ──────────────────────────────────────────
 let searchInput, resultList, statusEl, hintEl;
@@ -55,8 +82,12 @@ async function loadData() {
       return true;
     });
 
+    _lunColKey = null; // 컬럼 키 캐시 초기화
+    _buildLunMap();
+
     if (!isSWRefresh) {
-      showStatus(`✅ ${powerData.length}개 회로 로드 완료`, "success");
+      const lunCount = lunMap.size;
+      showStatus(`✅ ${powerData.length}개 회로 로드 완료${lunCount ? ` (전원인가 ${lunCount}개)` : ""}`, "success");
       setTimeout(() => hideStatus(), 3000);
     }
     initSearch();
