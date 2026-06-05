@@ -217,35 +217,34 @@ function expandNodeDownstream(tag) {
 // LUN 맵(J열)에 데이터가 있으면 전원 인가(RED), 없으면 미인가(GREEN)
 function recalcPoweredState() {
     const useLun = typeof lunMap !== "undefined" && lunMap.size > 0;
+
+    // Step 1: 개별 노드 초기 상태 설정 (userOff 우선, 그 다음 LUN)
     Object.keys(nodeMap).forEach(tag => {
-        if (nodeMap[tag].userOff) {
-            nodeMap[tag].powered = false;
-            return;
-        }
-        if (useLun) {
-            // LUN 기반: J열에 값이 있으면 전원 인가(true=RED), 없으면 미인가(false=GREEN)
-            nodeMap[tag].powered = lunMap.has(tag);
+        const node = nodeMap[tag];
+        if (node.userOff) {
+            node.powered = false;
+        } else if (useLun) {
+            node.powered = lunMap.has(tag);
         } else {
-            // LUN 데이터 없을 때: 기존 상위 전파 방식
-            nodeMap[tag].powered = true;
+            node.powered = true;
         }
     });
-    // LUN 없을 때만 상위 전파 적용
-    if (!useLun) {
-        let changed = true;
-        while (changed) {
-            changed = false;
-            Object.keys(nodeMap).forEach(tag => {
-                if (nodeMap[tag].userOff) {
-                    if (nodeMap[tag].powered !== false) { nodeMap[tag].powered = false; changed = true; }
-                    return;
-                }
-                const upTags = edgeList.filter(e => e.toTag === tag).map(e => e.fromTag).filter(t => nodeMap[t]);
-                if (!upTags.length) return;
-                const anyOn = upTags.some(t => nodeMap[t].powered);
-                if (nodeMap[tag].powered !== anyOn) { nodeMap[tag].powered = anyOn; changed = true; }
-            });
-        }
+
+    // Step 2: 하위 전파 (LUN 여부 무관) - 상위가 모두 꺼지면 하위도 꺼짐
+    let changed = true;
+    while (changed) {
+        changed = false;
+        Object.keys(nodeMap).forEach(tag => {
+            const node = nodeMap[tag];
+            if (node.userOff) return;
+            const upTags = edgeList.filter(e => e.toTag === tag).map(e => e.fromTag).filter(t => nodeMap[t]);
+            if (!upTags.length) return;
+            const anyOn = upTags.some(t => nodeMap[t].powered !== false);
+            if (!anyOn && node.powered !== false) {
+                node.powered = false;
+                changed = true;
+            }
+        });
     }
 }
 
