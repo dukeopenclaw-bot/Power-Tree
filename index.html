@@ -30,7 +30,7 @@
       <div class="sidebar-header">
         <div class="sidebar-title">
           <h1>Power Tree</h1>
-          <span class="version">V8.13</span>
+          <span class="version">V8.14</span>
         </div>
         <button id="btn-reset" onclick="resetTree()" title="초기화">↺</button>
       </div>
@@ -195,17 +195,21 @@
     observer.observe(container);
   })();
 
-  // ── 사이드바 너비 드래그 조절 ────────────────────────
+  // ── 사이드바 너비 드래그 조절 (마우스 + 터치 모두 지원) ──
   (function () {
     const sb     = document.getElementById("sidebar");
     const handle = document.getElementById("sidebar-resize");
-    let dragging = false, startX = 0, startW = 0;
+    let dragging = false, startX = 0, startW = 0, pointerId = null;
 
-    handle.addEventListener("mousedown", e => {
+    const maxW = () => Math.min(560, Math.round(window.innerWidth * 0.85));
+
+    handle.addEventListener("pointerdown", e => {
       if (sb.classList.contains("collapsed")) return;
-      dragging = true;
-      startX   = e.clientX;
-      startW   = sb.offsetWidth;
+      dragging  = true;
+      pointerId = e.pointerId;
+      startX    = e.clientX;
+      startW    = sb.offsetWidth;
+      handle.setPointerCapture(pointerId);
       sb.classList.add("resizing");
       handle.classList.add("active");
       document.body.style.cursor     = "col-resize";
@@ -213,22 +217,25 @@
       e.preventDefault();
     });
 
-    document.addEventListener("mousemove", e => {
-      if (!dragging) return;
-      const newW = Math.max(180, Math.min(560, startW + e.clientX - startX));
+    handle.addEventListener("pointermove", e => {
+      if (!dragging || e.pointerId !== pointerId) return;
+      const newW = Math.max(180, Math.min(maxW(), startW + e.clientX - startX));
       sb.style.width    = newW + "px";
       sb.style.minWidth = newW + "px";
     });
 
-    document.addEventListener("mouseup", () => {
-      if (!dragging) return;
-      dragging = false;
+    const endDrag = e => {
+      if (!dragging || (e && e.pointerId !== pointerId)) return;
+      dragging  = false;
+      pointerId = null;
       sb.classList.remove("resizing");
       handle.classList.remove("active");
       document.body.style.cursor     = "";
       document.body.style.userSelect = "";
       if (typeof zoomFit === "function") zoomFit();
-    });
+    };
+    handle.addEventListener("pointerup", endDrag);
+    handle.addEventListener("pointercancel", endDrag);
   })();
 </script>
 
