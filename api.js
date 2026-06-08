@@ -220,11 +220,31 @@ function addSelected() {
 }
 
 // ── 사이드바 제어 ─────────────────────────────────────
+// 드래그로 너비를 조절하면 인라인 style.width/minWidth가 설정되는데,
+// 이는 .collapsed 클래스의 width:0 규칙보다 우선순위가 높아 축소해도
+// 화면을 가리는 문제가 생긴다. 축소 시 인라인 값을 제거(저장)하고
+// 확장 시 복원한다.
+function _collapseSidebarEl(sb) {
+  if (sb.style.width) sb.dataset.customWidth = sb.style.width;
+  sb.style.width = "";
+  sb.style.minWidth = "";
+  sb.classList.add("collapsed");
+}
+function _expandSidebarEl(sb) {
+  sb.classList.remove("collapsed");
+  if (sb.dataset.customWidth) {
+    sb.style.width    = sb.dataset.customWidth;
+    sb.style.minWidth = sb.dataset.customWidth;
+  }
+}
 function collapseSidebar() {
-  document.getElementById("sidebar").classList.add("collapsed");
+  const sb = document.getElementById("sidebar");
+  if (!sb.classList.contains("collapsed")) _collapseSidebarEl(sb);
 }
 function toggleSidebar() {
-  document.getElementById("sidebar").classList.toggle("collapsed");
+  const sb = document.getElementById("sidebar");
+  if (sb.classList.contains("collapsed")) _expandSidebarEl(sb);
+  else _collapseSidebarEl(sb);
 }
 
 // ── 유틸 ──────────────────────────────────────────────
