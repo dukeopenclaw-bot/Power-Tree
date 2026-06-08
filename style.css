@@ -89,8 +89,8 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 
 /* ─── Sidebar ─── */
 #sidebar {
-  width: 280px;
-  min-width: 280px;
+  width: 320px;
+  min-width: 320px;
   display: flex;
   flex-direction: column;
   background: var(--sidebar-bg);
@@ -204,6 +204,7 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
   z-index: 15;
   transition: background 0.15s;
   user-select: none;
+  touch-action: none;
 }
 #sidebar-resize:hover,
 #sidebar-resize.active {
@@ -281,9 +282,8 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 }
 .result-text .tag {
   display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 .result-text .desc {
   display: block;
@@ -729,14 +729,14 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 
 /* ─── Mobile (모바일 최적화) ─── */
 @media (max-width: 600px) {
-  /* 사이드바 너비를 줄여서 트리 화면 확보 */
+  /* 사이드바 너비를 줄여서 트리 화면 확보 (장비명이 보이도록 기존보다 넓게) */
   #sidebar {
-    width: 180px;
+    width: 220px;
     min-width: 150px;
   }
-  /* 모바일: 핸들 숨김 (터치 드래그 미지원) */
-  #sidebar-resize { display: none; }
-  
+  /* 모바일: 핸들 터치 드래그 지원 → 너비를 손가락으로 조절 가능하게 살짝 넓힘 */
+  #sidebar-resize { width: 14px; }
+
   /* 화면이 좁은 모바일에서는 범례(Legend)를 숨겨 시야 방해 제거 */
   #legend { 
     display: none; 
